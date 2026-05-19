@@ -1,21 +1,16 @@
-//
-//  ContentView.swift
-//  insacol-app
-//
-//  Created by Guillermo Matos on 16/5/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @State private var auth = AuthManager.shared
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if auth.isAuthenticated {
+                MainTabView()
+            } else {
+                LoginView()
+            }
         }
-        .padding()
     }
 }
 
