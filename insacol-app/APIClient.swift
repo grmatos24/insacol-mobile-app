@@ -73,7 +73,8 @@ final class AuthManager {
 final class APIClient {
     static let shared = APIClient()
 
-    // IP del backend en Docker
+    // Backend en Docker, accesible vía la IP LAN del Mac.
+    // (En simulador iOS, "localhost" no siempre apunta al Mac host, por eso usamos la IP de la red.)
     var baseURL: URL = URL(string: "http://192.168.40.238:8080")!
 
     private let session: URLSession
@@ -248,6 +249,11 @@ final class APIClient {
 
     // MARK: - Proveedores
 
+    func listProveedores() async throws -> [ProveedorDto] {
+        let req = try makeRequest(path: "proveedores", method: "GET")
+        return try await perform(req, as: [ProveedorDto].self)
+    }
+
     func consultarRuc(ruc: String, tipoRuc: String) async throws -> ProveedorDto {
         let items = [
             URLQueryItem(name: "ruc", value: ruc),
@@ -275,5 +281,311 @@ final class APIClient {
     func listCuentasBancarias() async throws -> [CuentaBancariaDto] {
         let req = try makeRequest(path: "cuentas-bancarias/list", method: "GET")
         return try await perform(req, as: [CuentaBancariaDto].self)
+    }
+
+    // MARK: - Clientes
+
+    func listClientes(page: Int = 0, size: Int = 200) async throws -> Page<ClienteDto> {
+        let items = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)")
+        ]
+        let req = try makeRequest(path: "clientes/list", method: "GET", query: items)
+        return try await perform(req, as: Page<ClienteDto>.self)
+    }
+
+    func searchClientes(term: String = "", page: Int = 0, size: Int = 20) async throws -> Page<ClienteDto> {
+        let items = [
+            URLQueryItem(name: "term", value: term),
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)")
+        ]
+        let req = try makeRequest(path: "clientes/search", method: "GET", query: items)
+        return try await perform(req, as: Page<ClienteDto>.self)
+    }
+
+    func createCliente(_ dto: ClienteDto) async throws -> ClienteDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "clientes/save", method: "POST", body: body)
+        return try await perform(req, as: ClienteDto.self)
+    }
+
+    func updateCliente(id: Int64, dto: ClienteDto) async throws -> ClienteDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "clientes/update/\(id)", method: "PUT", body: body)
+        return try await perform(req, as: ClienteDto.self)
+    }
+
+    func deleteCliente(id: Int64) async throws {
+        let req = try makeRequest(path: "clientes/\(id)", method: "DELETE")
+        try await performVoid(req)
+    }
+
+    // MARK: - Extintores de cliente
+
+    func listExtintoresActivos(clienteId: Int64) async throws -> [ExtintorClienteDto] {
+        let req = try makeRequest(path: "extintores-cliente/activos/\(clienteId)", method: "GET")
+        return try await perform(req, as: [ExtintorClienteDto].self)
+    }
+
+    // MARK: - Catálogo de extintores
+
+    func listExtintoresCatalogo() async throws -> [ExtintorDto] {
+        let items = [URLQueryItem(name: "size", value: "1000")]
+        let req = try makeRequest(path: "extintores/list", method: "GET", query: items)
+        let page = try await perform(req, as: Page<ExtintorDto>.self)
+        return page.content
+    }
+
+    func listMarcasExtintor() async throws -> [ExtintorMarcaDto] {
+        let req = try makeRequest(path: "marcas-extintor/list", method: "GET")
+        return try await perform(req, as: [ExtintorMarcaDto].self)
+    }
+
+    func listTiposExtintor() async throws -> [ExtintorTipoDto] {
+        let req = try makeRequest(path: "tipos-extintor/list", method: "GET")
+        return try await perform(req, as: [ExtintorTipoDto].self)
+    }
+
+    func listCapacidadesExtintor() async throws -> [ExtintorCapacidadDto] {
+        let req = try makeRequest(path: "capacidades-extintor/list", method: "GET")
+        return try await perform(req, as: [ExtintorCapacidadDto].self)
+    }
+
+    // MARK: - Productos
+
+    func listProductos(page: Int = 0, size: Int = 50) async throws -> Page<ProductoDto> {
+        let items = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)")
+        ]
+        let req = try makeRequest(path: "productos/list", method: "GET", query: items)
+        return try await perform(req, as: Page<ProductoDto>.self)
+    }
+
+    func searchProductos(term: String) async throws -> [ProductoDto] {
+        let items = [URLQueryItem(name: "term", value: term)]
+        let req = try makeRequest(path: "productos/search", method: "GET", query: items)
+        return try await perform(req, as: [ProductoDto].self)
+    }
+
+    func createProducto(_ dto: ProductoDto) async throws -> ProductoDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "productos/save", method: "POST", body: body)
+        return try await perform(req, as: ProductoDto.self)
+    }
+
+    func updateProducto(id: Int64, dto: ProductoDto) async throws -> ProductoDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "productos/\(id)", method: "PUT", body: body)
+        return try await perform(req, as: ProductoDto.self)
+    }
+
+    func deleteProducto(id: Int64) async throws {
+        let req = try makeRequest(path: "productos/\(id)", method: "DELETE")
+        try await performVoid(req)
+    }
+
+    // MARK: - Cotizaciones
+
+    func listCotizaciones(searchTerm: String = "", page: Int = 0, size: Int = 30) async throws -> Page<CotizacionDto> {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)")
+        ]
+        if !searchTerm.isEmpty {
+            items.append(URLQueryItem(name: "term", value: searchTerm))
+        }
+        let req = try makeRequest(path: "cotizaciones/search", method: "GET", query: items)
+        return try await perform(req, as: Page<CotizacionDto>.self)
+    }
+
+    func getCotizacion(id: Int64) async throws -> CotizacionDto {
+        let req = try makeRequest(path: "cotizaciones/\(id)", method: "GET")
+        return try await perform(req, as: CotizacionDto.self)
+    }
+
+    func createCotizacion(_ dto: CotizacionDto) async throws -> CotizacionDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "cotizaciones/save", method: "POST", body: body)
+        return try await perform(req, as: CotizacionDto.self)
+    }
+
+    func updateCotizacion(id: Int64, dto: CotizacionDto) async throws -> CotizacionDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "cotizaciones/update/\(id)", method: "PUT", body: body)
+        return try await perform(req, as: CotizacionDto.self)
+    }
+
+    func deleteCotizacion(id: Int64) async throws {
+        let req = try makeRequest(path: "cotizaciones/\(id)", method: "DELETE")
+        try await performVoid(req)
+    }
+
+    func downloadCotizacionPdf(id: Int64) async throws -> Data {
+        var req = try makeRequest(path: "cotizaciones/\(id)/pdf", method: "GET")
+        req.setValue("application/pdf", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(URLError(.badServerResponse))
+        }
+        if http.statusCode == 401 { AuthManager.shared.clear(); throw APIError.unauthorized }
+        if !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
+    // MARK: - Facturas
+
+    func listFacturas(searchTerm: String = "",
+                      pagado: Bool? = nil,
+                      fechaInicio: Date? = nil,
+                      fechaFin: Date? = nil,
+                      page: Int = 0,
+                      size: Int = 30) async throws -> Page<FacturaDto> {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)")
+        ]
+        if !searchTerm.isEmpty { items.append(URLQueryItem(name: "term", value: searchTerm)) }
+        if let p = pagado { items.append(URLQueryItem(name: "pagado", value: "\(p)")) }
+        if let f = fechaInicio { items.append(URLQueryItem(name: "fechaInicio", value: f.apiDateString)) }
+        if let f = fechaFin { items.append(URLQueryItem(name: "fechaFin", value: f.apiDateString)) }
+        let req = try makeRequest(path: "facturas/search", method: "GET", query: items)
+        return try await perform(req, as: Page<FacturaDto>.self)
+    }
+
+    func getFactura(id: Int64) async throws -> FacturaDto {
+        let req = try makeRequest(path: "facturas/\(id)", method: "GET")
+        return try await perform(req, as: FacturaDto.self)
+    }
+
+    func createFactura(_ dto: FacturaDto) async throws -> FacturaDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "facturas/save", method: "POST", body: body)
+        return try await perform(req, as: FacturaDto.self)
+    }
+
+    func createFacturaFromCotizacion(cotizacionId: Int64) async throws -> FacturaDto {
+        let req = try makeRequest(path: "facturas/from-cotizacion/\(cotizacionId)", method: "POST")
+        return try await perform(req, as: FacturaDto.self)
+    }
+
+    func getPreFactura(reporteId: Int64) async throws -> FacturaDto {
+        let req = try makeRequest(path: "reportes-mantenimiento/\(reporteId)/pre-factura", method: "GET")
+        return try await perform(req, as: FacturaDto.self)
+    }
+
+    func anularFactura(id: Int64) async throws -> FacturaDto {
+        let req = try makeRequest(path: "facturas/anular/\(id)", method: "PATCH")
+        return try await perform(req, as: FacturaDto.self)
+    }
+
+    func downloadFacturaPdf(id: Int64) async throws -> Data {
+        var req = try makeRequest(path: "facturas/\(id)/pdf", method: "GET")
+        req.setValue("application/pdf", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(URLError(.badServerResponse))
+        }
+        if http.statusCode == 401 { AuthManager.shared.clear(); throw APIError.unauthorized }
+        if !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
+    func emitirFacturaElectronica(id: Int64) async throws -> FacturaDto {
+        let req = try makeRequest(path: "facturas/\(id)/fe/emitir", method: "POST")
+        return try await perform(req, as: FacturaDto.self)
+    }
+
+    func downloadFacturaXml(id: Int64) async throws -> Data {
+        let req = try makeRequest(path: "facturas/\(id)/fe/xml", method: "GET")
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(URLError(.badServerResponse))
+        }
+        if http.statusCode == 401 { AuthManager.shared.clear(); throw APIError.unauthorized }
+        if !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
+    // MARK: - Reportes de mantenimiento
+
+    enum ReporteFilter: String {
+        case mesActual = "MES_ACTUAL"
+        case proximoMes = "PROXIMO_MES_ACTUAL"
+        case todos = "" // sin filterType
+    }
+
+    func listReportes(filter: ReporteFilter,
+                      searchTerm: String = "",
+                      fechaInicio: Date? = nil,
+                      fechaFin: Date? = nil,
+                      page: Int = 0,
+                      size: Int = 30) async throws -> Page<ReporteMantenimientoDto> {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)"),
+            URLQueryItem(name: "sort", value: "fechaServicio,desc")
+        ]
+        if !filter.rawValue.isEmpty {
+            items.append(URLQueryItem(name: "filterType", value: filter.rawValue))
+        }
+        if !searchTerm.isEmpty {
+            items.append(URLQueryItem(name: "searchTerm", value: searchTerm))
+        }
+        if let f = fechaInicio {
+            items.append(URLQueryItem(name: "fechaInicio", value: f.apiDateString))
+        }
+        if let f = fechaFin {
+            items.append(URLQueryItem(name: "fechaFin", value: f.apiDateString))
+        }
+        let req = try makeRequest(path: "reportes-mantenimiento/list", method: "GET", query: items)
+        return try await perform(req, as: Page<ReporteMantenimientoDto>.self)
+    }
+
+    func getReporte(id: Int64) async throws -> ReporteMantenimientoDto {
+        let req = try makeRequest(path: "reportes-mantenimiento/\(id)", method: "GET")
+        return try await perform(req, as: ReporteMantenimientoDto.self)
+    }
+
+    func saveReporte(_ dto: ReporteMantenimientoDto) async throws -> ReporteMantenimientoDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "reportes-mantenimiento/save", method: "POST", body: body)
+        return try await perform(req, as: ReporteMantenimientoDto.self)
+    }
+
+    func updateReporte(id: Int64, dto: ReporteMantenimientoDto) async throws -> ReporteMantenimientoDto {
+        let body = try encoder.encode(dto)
+        let req = try makeRequest(path: "reportes-mantenimiento/\(id)", method: "PUT", body: body)
+        return try await perform(req, as: ReporteMantenimientoDto.self)
+    }
+
+    func deleteReporte(id: Int64) async throws {
+        let req = try makeRequest(path: "reportes-mantenimiento/\(id)", method: "DELETE")
+        try await performVoid(req)
+    }
+
+    func downloadReportePdf(id: Int64) async throws -> Data {
+        var req = try makeRequest(path: "reportes-mantenimiento/pdf/\(id)", method: "GET")
+        req.setValue("application/pdf", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(URLError(.badServerResponse))
+        }
+        if http.statusCode == 401 {
+            AuthManager.shared.clear()
+            throw APIError.unauthorized
+        }
+        if !(200..<300).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw APIError.http(status: http.statusCode, body: body)
+        }
+        return data
     }
 }
