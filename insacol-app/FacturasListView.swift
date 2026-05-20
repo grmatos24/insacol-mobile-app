@@ -45,6 +45,7 @@ final class FacturasListViewModel {
 
     func anular(_ f: FacturaDto) async {
         guard let id = f.id else { return }
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -57,6 +58,7 @@ final class FacturasListViewModel {
 
     func emitirFe(_ f: FacturaDto) async {
         guard let id = f.id else { return }
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
