@@ -263,6 +263,7 @@ struct FacturasListView: View {
         do {
             let data = try await APIClient.shared.downloadFacturaXml(id: id)
             xmlToShare = XMLShareItem(
+                id: id,
                 data: data,
                 suggestedName: "Factura_\(f.serie ?? String(id)).xml"
             )
@@ -275,9 +276,9 @@ struct FacturasListView: View {
 // MARK: - XML Share Item
 
 struct XMLShareItem: Identifiable {
+    let id: Int64
     let data: Data
     let suggestedName: String
-    var id: String { suggestedName }
 }
 
 // MARK: - Factura Row
@@ -376,8 +377,10 @@ private struct FacturasFiltersSheet: View {
                 }
                 Section {
                     Button("Limpiar filtros") {
-                        useInicio = false; useFin = false
-                        fechaInicio = nil; fechaFin = nil
+                        useInicio = false
+                        useFin = false
+                        localInicio = Date()
+                        localFin = Date()
                     }
                 }
             }
