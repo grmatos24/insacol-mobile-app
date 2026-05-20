@@ -124,7 +124,7 @@ struct ClientesListView: View {
                     get: { vm.errorMessage != nil },
                     set: { if !$0 { vm.errorMessage = nil } }
                    )) {
-                Button("OK") { vm.errorMessage = nil }
+                Button("OK", role: .cancel) { vm.errorMessage = nil }
             } message: { Text(vm.errorMessage ?? "") }
         }
     }
@@ -153,4 +153,8 @@ private struct ClienteRow: View {
         }
         .padding(.vertical, 2)
     }
+}
+
+#Preview {
+    ClientesListView()
 }

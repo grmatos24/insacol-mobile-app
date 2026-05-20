@@ -20,6 +20,7 @@ struct ClienteFormView: View {
     @State private var distritoFe: String
     @State private var corregimientoFe: String
     @State private var direccionFe: String
+    @State private var tipoRucSeleccion: String
 
     @State private var isSubmitting = false
     @State private var isConsultandoRuc = false
@@ -45,6 +46,7 @@ struct ClienteFormView: View {
         _distritoFe = State(initialValue: cliente?.distritoFe ?? "")
         _corregimientoFe = State(initialValue: cliente?.corregimientoFe ?? "")
         _direccionFe = State(initialValue: cliente?.direccionFe ?? "")
+        _tipoRucSeleccion = State(initialValue: "1")
         self.onClose = onClose
     }
 
@@ -82,6 +84,10 @@ struct ClienteFormView: View {
                         .keyboardType(.numberPad)
                     TextField("Tipo contribuyente", text: $tipoContribuyente)
                     Toggle("Retiene ITBMS", isOn: $retieneItbms)
+                    Picker("Tipo de RUC", selection: $tipoRucSeleccion) {
+                        Text("Natural").tag("1")
+                        Text("Jurídica").tag("2")
+                    }
                     Button {
                         Task { await consultarRuc() }
                     } label: {
@@ -131,7 +137,7 @@ struct ClienteFormView: View {
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                    )) {
-                Button("OK") { errorMessage = nil }
+                Button("OK", role: .cancel) { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
         }
     }
@@ -143,7 +149,7 @@ struct ClienteFormView: View {
             // consultarRuc returns ProveedorDto; ProveedorDto.dv is String?
             let proveedor = try await APIClient.shared.consultarRuc(
                 ruc: ruc.trimmingCharacters(in: .whitespaces),
-                tipoRuc: "N"
+                tipoRuc: tipoRucSeleccion
             )
             if let razon = proveedor.razonSocial, !razon.isEmpty {
                 empresa = razon
@@ -191,4 +197,8 @@ struct ClienteFormView: View {
             errorMessage = error.localizedDescription
         }
     }
+}
+
+#Preview {
+    ClienteFormView(cliente: nil) { _ in }
 }
