@@ -167,6 +167,30 @@ final class APIClient {
         }
     }
 
+    private func downloadData(path: String, accept: String = "application/pdf") async throws -> Data {
+        var req = try makeRequest(path: path, method: "GET")
+        req.setValue(accept, forHTTPHeaderField: "Accept")
+        do {
+            let (data, response) = try await session.data(for: req)
+            guard let http = response as? HTTPURLResponse else {
+                throw APIError.transport(URLError(.badServerResponse))
+            }
+            if http.statusCode == 401 {
+                AuthManager.shared.clear()
+                throw APIError.unauthorized
+            }
+            if !(200..<300).contains(http.statusCode) {
+                let body = String(data: data, encoding: .utf8) ?? ""
+                throw APIError.http(status: http.statusCode, body: body)
+            }
+            return data
+        } catch let e as APIError {
+            throw e
+        } catch {
+            throw APIError.transport(error)
+        }
+    }
+
     struct EmptyResponse: Decodable {}
 
     // MARK: - Auth
@@ -423,17 +447,7 @@ final class APIClient {
     }
 
     func downloadCotizacionPdf(id: Int64) async throws -> Data {
-        var req = try makeRequest(path: "cotizaciones/\(id)/pdf", method: "GET")
-        req.setValue("application/pdf", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: req)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(URLError(.badServerResponse))
-        }
-        if http.statusCode == 401 { AuthManager.shared.clear(); throw APIError.unauthorized }
-        if !(200..<300).contains(http.statusCode) {
-            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        return data
+        return try await downloadData(path: "cotizaciones/\(id)/pdf")
     }
 
     // MARK: - Facturas
@@ -472,6 +486,7 @@ final class APIClient {
         return try await perform(req, as: FacturaDto.self)
     }
 
+    // Calls a reporte path but returns a pre-filled FacturaDto for review
     func getPreFactura(reporteId: Int64) async throws -> FacturaDto {
         let req = try makeRequest(path: "reportes-mantenimiento/\(reporteId)/pre-factura", method: "GET")
         return try await perform(req, as: FacturaDto.self)
@@ -483,17 +498,7 @@ final class APIClient {
     }
 
     func downloadFacturaPdf(id: Int64) async throws -> Data {
-        var req = try makeRequest(path: "facturas/\(id)/pdf", method: "GET")
-        req.setValue("application/pdf", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: req)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(URLError(.badServerResponse))
-        }
-        if http.statusCode == 401 { AuthManager.shared.clear(); throw APIError.unauthorized }
-        if !(200..<300).contains(http.statusCode) {
-            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        return data
+        return try await downloadData(path: "facturas/\(id)/pdf")
     }
 
     func emitirFacturaElectronica(id: Int64) async throws -> FacturaDto {
@@ -502,16 +507,7 @@ final class APIClient {
     }
 
     func downloadFacturaXml(id: Int64) async throws -> Data {
-        let req = try makeRequest(path: "facturas/\(id)/fe/xml", method: "GET")
-        let (data, response) = try await session.data(for: req)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(URLError(.badServerResponse))
-        }
-        if http.statusCode == 401 { AuthManager.shared.clear(); throw APIError.unauthorized }
-        if !(200..<300).contains(http.statusCode) {
-            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        return data
+        return try await downloadData(path: "facturas/\(id)/fe/xml", accept: "application/xml")
     }
 
     // MARK: - Reportes de mantenimiento
@@ -572,20 +568,6 @@ final class APIClient {
     }
 
     func downloadReportePdf(id: Int64) async throws -> Data {
-        var req = try makeRequest(path: "reportes-mantenimiento/pdf/\(id)", method: "GET")
-        req.setValue("application/pdf", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: req)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(URLError(.badServerResponse))
-        }
-        if http.statusCode == 401 {
-            AuthManager.shared.clear()
-            throw APIError.unauthorized
-        }
-        if !(200..<300).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw APIError.http(status: http.statusCode, body: body)
-        }
-        return data
+        return try await downloadData(path: "reportes-mantenimiento/pdf/\(id)")
     }
 }
