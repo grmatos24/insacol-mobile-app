@@ -4,6 +4,7 @@ import SwiftUI
 @Observable
 final class ReportesMantenimientoListViewModel {
     var reportes: [ReporteMantenimientoDto] = []
+    var clientesById: [Int64: ClienteDto] = [:]
     var isLoading = false
     var errorMessage: String?
 
@@ -12,23 +13,66 @@ final class ReportesMantenimientoListViewModel {
     var fechaInicio: Date? = nil
     var fechaFin: Date? = nil
 
+    /// Si el usuario no fijó fechas en el sheet de filtros, devolvemos el rango
+    /// apropiado para el tab seleccionado.
+    private func effectiveDateRange() -> (Date, Date) {
+        if let i = fechaInicio, let f = fechaFin { return (i, f) }
+        let cal = Calendar.current
+        let now = Date()
+        switch filter {
+        case .mesActual, .proximoMes:
+            // Mes actual completo (1er día → último día del mes)
+            let comps = cal.dateComponents([.year, .month], from: now)
+            let inicio = cal.date(from: comps) ?? now
+            let nextMonth = cal.date(byAdding: .month, value: 1, to: inicio) ?? now
+            let fin = cal.date(byAdding: .day, value: -1, to: nextMonth) ?? now
+            return (inicio, fin)
+        case .todos:
+            // Rango muy amplio para traer todo
+            let inicio = cal.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? now
+            let fin = cal.date(from: DateComponents(year: 2099, month: 12, day: 31)) ?? now
+            return (inicio, fin)
+        }
+    }
+
     func load() async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        let (inicio, fin) = effectiveDateRange()
         do {
-            let page = try await APIClient.shared.listReportes(
+            async let reportesTask = APIClient.shared.listReportes(
                 filter: filter,
                 searchTerm: search,
-                fechaInicio: fechaInicio,
-                fechaFin: fechaFin,
+                fechaInicio: inicio,
+                fechaFin: fin,
                 page: 0,
-                size: 50
+                size: 100
             )
-            self.reportes = page.content
+            // Solo cargamos clientes si todavía no los tenemos (cache simple)
+            if clientesById.isEmpty {
+                async let clientesTask = APIClient.shared.listClientes(size: 500)
+                let (page, cPage) = try await (reportesTask, clientesTask)
+                self.reportes = page.content
+                var map: [Int64: ClienteDto] = [:]
+                for c in cPage.content { if let id = c.id { map[id] = c } }
+                self.clientesById = map
+            } else {
+                self.reportes = try await reportesTask.content
+            }
         } catch {
             self.errorMessage = error.localizedDescription
         }
+    }
+
+    func displayName(for reporte: ReporteMantenimientoDto) -> String {
+        if let id = reporte.clienteId, let c = clientesById[id] {
+            if let s = c.subEmpresa, !s.isEmpty { return s }
+            if let e = c.empresa, !e.isEmpty { return e }
+        }
+        if let s = reporte.clienteSubEmpresa, !s.isEmpty { return s }
+        if let e = reporte.clienteEmpresa, !e.isEmpty { return e }
+        return "Cliente #\(reporte.clienteId.map(String.init) ?? "-")"
     }
 
     func delete(_ r: ReporteMantenimientoDto) async {
@@ -48,6 +92,66 @@ struct ReportesMantenimientoListView: View {
     @State private var editing: ReporteMantenimientoDto?
     @State private var toDelete: ReporteMantenimientoDto?
     @State private var showingFilters = false
+    @State private var cloningFrom: ReporteMantenimientoDto?
+    @State private var iniciandoMantenimientoId: Int64?
+    @State private var descargandoPdfId: Int64?
+    @State private var pdfToShare: PDFShareItem?
+    @State private var generandoFacturaId: Int64?
+    @State private var preFacturaItem: PreFacturaItem?
+
+    struct PreFacturaItem: Identifiable {
+        let id = UUID()
+        let dto: FacturaDto
+        let reporteId: Int64
+    }
+
+    private func descargarPdf(_ r: ReporteMantenimientoDto) async {
+        guard let id = r.id else { return }
+        descargandoPdfId = id
+        defer { descargandoPdfId = nil }
+        do {
+            let data = try await APIClient.shared.downloadReportePdf(id: id)
+            pdfToShare = PDFShareItem(
+                data: data,
+                id: id,
+                suggestedName: reportePdfFilename(clienteName: vm.displayName(for: r))
+            )
+        } catch {
+            vm.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func isFromPreviousYear(_ r: ReporteMantenimientoDto) -> Bool {
+        guard let d = r.fechaServicio?.apiDate else { return false }
+        let y = Calendar.current.component(.year, from: d)
+        let nowY = Calendar.current.component(.year, from: Date())
+        return y < nowY
+    }
+
+    private func generarPreFactura(_ r: ReporteMantenimientoDto) async {
+        guard let id = r.id else { return }
+        generandoFacturaId = id
+        defer { generandoFacturaId = nil }
+        do {
+            let dto = try await APIClient.shared.getPreFactura(reporteId: id)
+            preFacturaItem = PreFacturaItem(dto: dto, reporteId: id)
+        } catch {
+            vm.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func iniciarMantenimiento(_ r: ReporteMantenimientoDto) async {
+        guard let id = r.id else { return }
+        iniciandoMantenimientoId = id
+        defer { iniciandoMantenimientoId = nil }
+        do {
+            // Cargamos el reporte completo (con detalles) para clonarlo
+            let full = try await APIClient.shared.getReporte(id: id)
+            cloningFrom = full
+        } catch {
+            vm.errorMessage = error.localizedDescription
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -60,7 +164,7 @@ struct ReportesMantenimientoListView: View {
                     }
                 )) {
                     Text("Mes actual").tag(APIClient.ReporteFilter.mesActual)
-                    Text("Próximo mes").tag(APIClient.ReporteFilter.proximoMes)
+                    Text("Programados").tag(APIClient.ReporteFilter.proximoMes)
                     Text("Todos").tag(APIClient.ReporteFilter.todos)
                 }
                 .pickerStyle(.segmented)
@@ -80,7 +184,7 @@ struct ReportesMantenimientoListView: View {
                     } else {
                         List {
                             ForEach(vm.reportes) { r in
-                                ReporteRow(reporte: r)
+                                ReporteRow(reporte: r, clienteName: vm.displayName(for: r))
                                     .contentShape(Rectangle())
                                     .onTapGesture { editing = r }
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -94,10 +198,52 @@ struct ReportesMantenimientoListView: View {
                                         Button {
                                             editing = r
                                         } label: {
-                                            Label(r.estado == .facturado ? "Ver" : "Editar",
-                                                  systemImage: "pencil")
+                                            if r.estado == .facturado {
+                                                Label("Ver", systemImage: "eye")
+                                            } else {
+                                                Label("Editar", systemImage: "pencil")
+                                            }
                                         }
                                         .tint(.blue)
+                                    }
+                                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                        if r.estado != .facturado {
+                                            Button {
+                                                Task { await generarPreFactura(r) }
+                                            } label: {
+                                                if generandoFacturaId == r.id {
+                                                    ProgressView()
+                                                } else {
+                                                    Label("Crear factura",
+                                                          systemImage: "doc.text.fill")
+                                                }
+                                            }
+                                            .tint(.green)
+                                        }
+                                        if isFromPreviousYear(r) {
+                                            Button {
+                                                Task { await iniciarMantenimiento(r) }
+                                            } label: {
+                                                if iniciandoMantenimientoId == r.id {
+                                                    ProgressView()
+                                                } else {
+                                                    Label("Iniciar mantenimiento",
+                                                          systemImage: "wrench.adjustable")
+                                                }
+                                            }
+                                            .tint(.green)
+                                        }
+                                        Button {
+                                            Task { await descargarPdf(r) }
+                                        } label: {
+                                            if descargandoPdfId == r.id {
+                                                ProgressView()
+                                            } else {
+                                                Label("Descargar PDF",
+                                                      systemImage: "square.and.arrow.down")
+                                            }
+                                        }
+                                        .tint(.indigo)
                                     }
                             }
                         }
@@ -119,7 +265,7 @@ struct ReportesMantenimientoListView: View {
                         Image(systemName: "plus")
                     }
                 }
-                ToolbarItem(placement: .secondaryAction) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         showingFilters = true
                     } label: {
@@ -138,12 +284,32 @@ struct ReportesMantenimientoListView: View {
                     if saved { Task { await vm.load() } }
                 }
             }
+            .sheet(item: $cloningFrom) { r in
+                ReporteMantenimientoFormView(reporte: nil, cloneFrom: r) { saved in
+                    if saved { Task { await vm.load() } }
+                }
+            }
             .sheet(isPresented: $showingFilters) {
                 FiltersSheet(
                     fechaInicio: $vm.fechaInicio,
                     fechaFin: $vm.fechaFin,
                     onApply: { Task { await vm.load() } }
                 )
+            }
+            .sheet(item: $pdfToShare) { item in
+                PDFShareSheet(
+                    data: item.data,
+                    suggestedName: item.suggestedName ?? "Reporte.pdf"
+                )
+            }
+            .sheet(item: $preFacturaItem) { item in
+                FacturaFormView(
+                    prefilledDto: item.dto,
+                    reporteMantenimientoId: item.reporteId
+                ) { saved in
+                    preFacturaItem = nil
+                    if saved { Task { await vm.load() } }
+                }
             }
             .alert("¿Eliminar reporte?",
                    isPresented: Binding(
@@ -175,18 +341,13 @@ struct ReportesMantenimientoListView: View {
 
 private struct ReporteRow: View {
     let reporte: ReporteMantenimientoDto
-
-    var cliente: String {
-        if let s = reporte.clienteSubEmpresa, !s.isEmpty { return s }
-        if let e = reporte.clienteEmpresa, !e.isEmpty { return e }
-        return "Cliente #\(reporte.clienteId.map(String.init) ?? "-")"
-    }
+    let clienteName: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(cliente)
+                    Text(clienteName)
                         .font(.headline)
                         .lineLimit(1)
                     estadoBadge
