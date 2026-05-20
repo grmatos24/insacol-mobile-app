@@ -375,7 +375,7 @@ struct CotizacionDetalleDto: Codable, Identifiable, Hashable {
     var cantidad: Double?
     var precioVenta: Double?
     var total: Double?
-    var tasaItbms: String?
+    var tasaItbms: String?      // "00" | "01" | "02" | "03"
 }
 
 struct CotizacionDto: Codable, Identifiable, Hashable {
