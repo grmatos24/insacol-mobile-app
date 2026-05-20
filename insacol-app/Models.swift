@@ -144,6 +144,128 @@ struct GastoDto: Codable, Identifiable, Hashable {
     var detalles: [GastoDetalleDto]?
 }
 
+// MARK: - Cliente
+
+struct ClienteDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var empresa: String?
+    var subEmpresa: String?
+    var contactoNombre: String?
+    var contactoApellido: String?
+    var correo: String?
+    var telefono: String?
+    var celular: String?
+    var ruc: String?
+    var dv: Int?
+    var tipoContribuyente: String?
+    var retieneItbms: Bool?
+    var codigoUbicacion: String?
+    var provinciaFe: String?
+    var distritoFe: String?
+    var corregimientoFe: String?
+    var direccionFe: String?
+
+    var displayName: String {
+        if let s = subEmpresa, !s.isEmpty { return s }
+        if let e = empresa, !e.isEmpty { return e }
+        return "Cliente #\(id.map(String.init) ?? "-")"
+    }
+}
+
+// MARK: - Extintor Cliente
+
+struct ExtintorClienteDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var clienteId: Int64?
+    var clienteNombre: String?
+    var extintorCatalogoId: Int64?
+    var extintorNombre: String?
+    var numeroSerie: String?
+    var ubicacionHabitual: String?
+    var codigoInsacol: String?
+    var fechaPh: Int?
+    var fechaProxPh: Int?
+    var activo: Bool?
+}
+
+// MARK: - Extintor catálogo (marca / tipo / capacidad)
+
+struct ExtintorMarcaDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var nombre: String?
+}
+
+struct ExtintorTipoDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var nombre: String?
+}
+
+struct ExtintorCapacidadDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var valor: Double?
+    var unidad: String?   // backend usa enum UnidadCapacidad (LBS, KG, ...) — decodificamos como String
+
+    var displayText: String {
+        let v: String
+        if let valor {
+            v = (valor.truncatingRemainder(dividingBy: 1) == 0)
+                ? String(Int(valor))
+                : String(format: "%.1f", valor)
+        } else {
+            v = "?"
+        }
+        return "\(v) \(unidad ?? "")".trimmingCharacters(in: .whitespaces)
+    }
+}
+
+struct ExtintorDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var marcaId: Int64?
+    var tipoId: Int64?
+    var capacidadId: Int64?
+}
+
+// MARK: - Reporte de mantenimiento
+
+enum EstadoMantenimiento: String, Codable {
+    case borrador = "BORRADOR"
+    case facturado = "FACTURADO"
+}
+
+struct ReporteMantenimientoDetalleDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var extintorClienteId: Int64?
+    var extintorCatalogoId: Int64?
+    var numeroSerie: String?
+    var ubicacionHabitual: String?
+    var codigoInsacol: String?
+    var fechaPh: Int?
+    var fechaProxPh: Int?
+    var recargado: Bool?
+    var cantidadAgenteUtilizado: Double?
+    var pruebaHidrostatica: Bool?
+    var cambioManguera: Bool?
+    var correa: Bool?
+    var manometro: Bool?
+    var gancho: Bool?
+    var pasador: Bool?
+    var descartado: Bool?
+    var observaciones: String?
+}
+
+struct ReporteMantenimientoDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var clienteId: Int64?
+    var clienteEmpresa: String?
+    var clienteSubEmpresa: String?
+    var fechaServicio: String?           // "yyyy-MM-dd"
+    var fechaProximoServicio: String?    // "yyyy-MM-dd"
+    var observacionesGenerales: String?
+    var estado: EstadoMantenimiento?
+    var facturaId: Int64?
+    var detalles: [ReporteMantenimientoDetalleDto]?
+}
+
 // MARK: - Spring Data Page wrapper
 
 struct Page<T: Codable>: Codable {
@@ -184,4 +306,103 @@ extension Date {
 
 extension String {
     var apiDate: Date? { DateFormatters.isoDate.date(from: self) }
+}
+
+// MARK: - Producto
+
+struct ProductoDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var nombre: String?
+    var precio: Double?
+    var tipoProducto: String?   // "PRODUCTO" | "SERVICIO"
+}
+
+// MARK: - Factura
+
+struct FacturaDetalleDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var productoId: Int64?
+    var productoNombre: String?
+    var tipoProducto: String?
+    var cantidad: Double?
+    var precioVenta: Double?
+    var total: Double?
+    var tasaItbms: String?      // "00" | "01" | "02" | "03"
+}
+
+struct FacturaDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var clienteId: Int64?
+    var clienteEmpresa: String?
+    var clienteSubEmpresa: String?
+    var serie: String?
+    var fecha: String?
+    var subtotal: Double?
+    var descuento: Double?
+    var impuestos: Double?
+    var total: Double?
+    var formaPago: String?
+    var observaciones: String?
+    var pagado: Bool?
+    var anulada: Bool?
+    var cotizacionOrigenId: Int64?
+    var reporteMantenimientoId: Int64?
+    var detalles: [FacturaDetalleDto]?
+    var cuentaBancariaId: Int64?
+    var montoPagado: Double?
+    var fechaPago: String?
+    var estadoFe: String?               // "PENDIENTE" | "EMITIDA" | "ANULADA" | "ERROR"
+    var numeroDocumentoFiscal: String?
+    var cufe: String?
+    var qrUrl: String?
+    var retencionItbms: Bool?
+    var montoPorCobrar: Double?
+
+    var clienteDisplayName: String {
+        if let s = clienteSubEmpresa, !s.isEmpty { return s }
+        if let e = clienteEmpresa, !e.isEmpty { return e }
+        return "Cliente #\(clienteId.map(String.init) ?? "-")"
+    }
+}
+
+// MARK: - Cotización
+
+struct CotizacionDetalleDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var productoId: Int64?
+    var productoNombre: String?
+    var tipoProducto: String?
+    var cantidad: Double?
+    var precioVenta: Double?
+    var total: Double?
+    var tasaItbms: String?
+}
+
+struct CotizacionDto: Codable, Identifiable, Hashable {
+    var id: Int64?
+    var clienteId: Int64?
+    var clienteEmpresa: String?
+    var clienteSubEmpresa: String?
+    var serie: String?
+    var fecha: String?
+    var subtotal: Double?
+    var descuento: Double?
+    var impuestos: Double?
+    var total: Double?
+    var formaPago: String?
+    var observaciones: String?
+    var facturada: Bool?
+    var detalles: [CotizacionDetalleDto]?
+
+    var clienteDisplayName: String {
+        if let s = clienteSubEmpresa, !s.isEmpty { return s }
+        if let e = clienteEmpresa, !e.isEmpty { return e }
+        return "Cliente #\(clienteId.map(String.init) ?? "-")"
+    }
+}
+
+// MARK: - Currency helper
+
+extension Double {
+    var currencyString: String { String(format: "$%.2f", self) }
 }
