@@ -23,6 +23,8 @@ final class CotizacionesListViewModel {
 
     func delete(_ c: CotizacionDto) async {
         guard let id = c.id else { return }
+        isLoading = true
+        defer { isLoading = false }
         do {
             try await APIClient.shared.deleteCotizacion(id: id)
             await load()
@@ -47,12 +49,27 @@ final class CotizacionesListViewModel {
 
 struct CotizacionesListView: View {
     @State private var vm = CotizacionesListViewModel()
+    @State private var searchTask: Task<Void, Never>?
     @State private var showingAdd = false
     @State private var editing: CotizacionDto?
     @State private var toDelete: CotizacionDto?
     @State private var toFacturar: CotizacionDto?
     @State private var descargandoPdfId: Int64?
     @State private var pdfToShare: PDFShareItem?
+
+    private var successMessageBinding: Binding<Bool> {
+        Binding(
+            get: { vm.successMessage != nil },
+            set: { if !$0 { vm.successMessage = nil } }
+        )
+    }
+
+    private var errorMessageBinding: Binding<Bool> {
+        Binding(
+            get: { vm.errorMessage != nil },
+            set: { if !$0 { vm.errorMessage = nil } }
+        )
+    }
 
     private func descargarPdf(_ c: CotizacionDto) async {
         guard let id = c.id else { return }
@@ -70,39 +87,49 @@ struct CotizacionesListView: View {
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            Group {
-                if vm.isLoading && vm.cotizaciones.isEmpty {
-                    ProgressView("Cargando...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if vm.cotizaciones.isEmpty {
-                    ContentUnavailableView(
-                        "Sin cotizaciones",
-                        systemImage: "doc.text",
-                        description: Text("Toca + para crear la primera cotización.")
+    @ViewBuilder
+    private var contentView: some View {
+        if vm.isLoading && vm.cotizaciones.isEmpty {
+            ProgressView("Cargando...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if vm.cotizaciones.isEmpty {
+            ContentUnavailableView(
+                "Sin cotizaciones",
+                systemImage: "doc.text",
+                description: Text("Toca + para crear la primera cotización.")
+            )
+        } else {
+            List {
+                ForEach(vm.cotizaciones) { c in
+                    CotizacionListRow(
+                        cotizacion: c,
+                        descargandoPdfId: descargandoPdfId,
+                        onTap: { if c.facturada != true { editing = c } },
+                        onEditar: { editing = c },
+                        onFacturar: { toFacturar = c },
+                        onEliminar: { toDelete = c },
+                        onPdf: { Task { await descargarPdf(c) } }
                     )
-                } else {
-                    List {
-                        ForEach(vm.cotizaciones) { c in
-                            CotizacionListRow(
-                                cotizacion: c,
-                                descargandoPdfId: descargandoPdfId,
-                                onTap: { if c.facturada != true { editing = c } },
-                                onEditar: { editing = c },
-                                onFacturar: { toFacturar = c },
-                                onEliminar: { toDelete = c },
-                                onPdf: { Task { await descargarPdf(c) } }
-                            )
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable { await vm.load() }
                 }
             }
+            .listStyle(.plain)
+            .refreshable { await vm.load() }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            contentView
             .navigationTitle("Cotizaciones")
             .searchable(text: $vm.search, prompt: "Buscar cliente")
-            .onChange(of: vm.search) { _, _ in Task { await vm.load() } }
+            .onChange(of: vm.search) { _, _ in
+                searchTask?.cancel()
+                searchTask = Task {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+                    await vm.load()
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
@@ -151,17 +178,12 @@ struct CotizacionesListView: View {
                 }
             } message: { _ in Text("Esta acción no se puede deshacer.") }
             .alert("Factura creada",
-                   isPresented: Binding(
-                    get: { vm.successMessage != nil },
-                    set: { if !$0 { vm.successMessage = nil } }
-                   )) {
+                   isPresented: successMessageBinding,
+                   presenting: vm.successMessage) { _ in
                 Button("OK") { vm.successMessage = nil }
-            } message: { Text(vm.successMessage ?? "") }
+            } message: { msg in Text(msg) }
             .alert("Error",
-                   isPresented: Binding(
-                    get: { vm.errorMessage != nil },
-                    set: { if !$0 { vm.errorMessage = nil } }
-                   )) {
+                   isPresented: errorMessageBinding) {
                 Button("OK") { vm.errorMessage = nil }
             } message: { Text(vm.errorMessage ?? "") }
         }

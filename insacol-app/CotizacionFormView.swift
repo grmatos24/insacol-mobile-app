@@ -4,7 +4,7 @@ private struct IdentifiableUUID: Identifiable {
     let id: UUID
 }
 
-fileprivate struct LineaItem: Identifiable {
+private struct LineaItem: Identifiable {
     var id = UUID()
     var productoId: Int64?
     var productoNombre: String = ""
@@ -29,7 +29,7 @@ fileprivate struct LineaItem: Identifiable {
 
 @MainActor
 @Observable
-fileprivate final class CotizacionFormViewModel {
+private final class CotizacionFormViewModel {
     var clienteId: Int64?
     var clienteNombre: String = ""
     var fecha: Date = Date()
@@ -45,6 +45,10 @@ fileprivate final class CotizacionFormViewModel {
     var isValid: Bool {
         clienteId != nil
         && lineas.contains { $0.productoId != nil && $0.cantidad > 0 }
+    }
+
+    init(cotizacion: CotizacionDto? = nil) {
+        if let c = cotizacion { loadFrom(c) }
     }
 
     func loadFrom(_ dto: CotizacionDto) {
@@ -108,11 +112,7 @@ struct CotizacionFormView: View {
     init(cotizacion: CotizacionDto?, onClose: @escaping (Bool) -> Void) {
         self.existingId = cotizacion?.id
         self.onClose = onClose
-        if let c = cotizacion {
-            let vm = CotizacionFormViewModel()
-            vm.loadFrom(c)
-            _vm = State(initialValue: vm)
-        }
+        _vm = State(initialValue: CotizacionFormViewModel(cotizacion: cotizacion))
     }
 
     var body: some View {
@@ -293,6 +293,12 @@ private struct LineaFormRow: View {
                     Text(linea.total.currencyString).font(.subheadline.bold())
                 }
             }
+        }
+        .onChange(of: linea.precioVenta) { _, v in
+            precioText = v == 0 ? "" : String(format: "%.2f", v)
+        }
+        .onChange(of: linea.cantidad) { _, v in
+            cantidadText = v == 1 ? "1" : String(format: "%.2f", v)
         }
         .padding(.vertical, 4)
         .onAppear {
