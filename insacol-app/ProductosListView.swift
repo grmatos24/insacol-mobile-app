@@ -8,20 +8,16 @@ final class ProductosListViewModel {
     var errorMessage: String?
     var search: String = ""
 
-    var filtered: [ProductoDto] {
-        let q = search.lowercased().trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return productos }
-        return productos.filter { $0.nombre?.lowercased().contains(q) ?? false }
-    }
-
     func load() async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let page = try await APIClient.shared.listProductos(size: 500)
-            self.productos = page.content.sorted {
-                ($0.nombre ?? "").localizedCaseInsensitiveCompare($1.nombre ?? "") == .orderedAscending
+            if search.trimmingCharacters(in: .whitespaces).isEmpty {
+                let page = try await APIClient.shared.listProductos(page: 0, size: 50)
+                self.productos = page.content
+            } else {
+                self.productos = try await APIClient.shared.searchProductos(term: search)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -51,7 +47,7 @@ struct ProductosListView: View {
                 if vm.isLoading && vm.productos.isEmpty {
                     ProgressView("Cargando...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if vm.filtered.isEmpty {
+                } else if vm.productos.isEmpty {
                     ContentUnavailableView(
                         "Sin productos",
                         systemImage: "shippingbox",
@@ -61,7 +57,7 @@ struct ProductosListView: View {
                     )
                 } else {
                     List {
-                        ForEach(vm.filtered) { p in
+                        ForEach(vm.productos) { p in
                             ProductoRow(producto: p)
                                 .contentShape(Rectangle())
                                 .onTapGesture { editing = p }
@@ -86,6 +82,7 @@ struct ProductosListView: View {
             }
             .navigationTitle("Productos")
             .searchable(text: $vm.search, prompt: "Buscar producto")
+            .onChange(of: vm.search) { _, _ in Task { await vm.load() } }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }

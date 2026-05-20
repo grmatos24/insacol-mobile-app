@@ -77,12 +77,13 @@ struct ProductoFormView: View {
     }
 
     private func submit() async {
+        guard let precio = precioDouble, precio > 0 else { return }
         isSubmitting = true
         defer { isSubmitting = false }
         let dto = ProductoDto(
             id: existingId,
             nombre: nombre.trimmingCharacters(in: .whitespaces),
-            precio: precioDouble,
+            precio: precio,
             tipoProducto: tipoProducto
         )
         do {
