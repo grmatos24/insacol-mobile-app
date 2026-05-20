@@ -1,10 +1,6 @@
 import SwiftUI
 
-struct IdentifiableUUID: Identifiable {
-    let id: UUID
-}
-
-private struct LineaItem: Identifiable {
+private struct FacturaLineaItem: Identifiable {
     var id = UUID()
     var productoId: Int64?
     var productoNombre: String = ""
@@ -29,14 +25,15 @@ private struct LineaItem: Identifiable {
 
 @MainActor
 @Observable
-private final class CotizacionFormViewModel {
+private final class FacturaFormViewModel {
     var clienteId: Int64?
     var clienteNombre: String = ""
     var fecha: Date = Date()
     var formaPago: MetodoPago = .efectivo
+    var retencionItbms: Bool = false
     var observaciones: String = ""
     var descuento: Double = 0
-    var lineas: [LineaItem] = []
+    var lineas: [FacturaLineaItem] = []
 
     var subtotal: Double { lineas.reduce(0) { $0 + $1.total } }
     var totalItbms: Double { lineas.reduce(0) { $0 + $1.itbmsAmount } }
@@ -47,19 +44,20 @@ private final class CotizacionFormViewModel {
         && lineas.contains { $0.productoId != nil && $0.cantidad > 0 }
     }
 
-    init(cotizacion: CotizacionDto? = nil) {
-        if let c = cotizacion { loadFrom(c) }
+    init(dto: FacturaDto? = nil) {
+        if let dto = dto { loadFrom(dto) }
     }
 
-    func loadFrom(_ dto: CotizacionDto) {
+    func loadFrom(_ dto: FacturaDto) {
         clienteId = dto.clienteId
         clienteNombre = dto.clienteDisplayName
         fecha = dto.fecha?.apiDate ?? Date()
         formaPago = MetodoPago(rawValue: dto.formaPago ?? "") ?? .efectivo
+        retencionItbms = dto.retencionItbms ?? false
         observaciones = dto.observaciones ?? ""
         descuento = dto.descuento ?? 0
         lineas = (dto.detalles ?? []).map { d in
-            var l = LineaItem()
+            var l = FacturaLineaItem()
             l.productoId = d.productoId
             l.productoNombre = d.productoNombre ?? ""
             l.tipoProducto = d.tipoProducto
@@ -70,10 +68,13 @@ private final class CotizacionFormViewModel {
         }
     }
 
-    func toDto(existingId: Int64?) -> CotizacionDto {
-        CotizacionDto(
-            id: existingId,
+    func toDto(reporteMantenimientoId: Int64?) -> FacturaDto {
+        FacturaDto(
+            id: nil,
             clienteId: clienteId,
+            clienteEmpresa: nil,
+            clienteSubEmpresa: nil,
+            serie: nil,
             fecha: fecha.apiDateString,
             subtotal: subtotal,
             descuento: descuento > 0 ? descuento : nil,
@@ -81,8 +82,12 @@ private final class CotizacionFormViewModel {
             total: total,
             formaPago: formaPago.rawValue,
             observaciones: observaciones.isEmpty ? nil : observaciones,
+            pagado: nil,
+            anulada: nil,
+            cotizacionOrigenId: nil,
+            reporteMantenimientoId: reporteMantenimientoId,
             detalles: lineas.map { l in
-                CotizacionDetalleDto(
+                FacturaDetalleDto(
                     id: nil,
                     productoId: l.productoId,
                     productoNombre: l.productoNombre,
@@ -92,16 +97,26 @@ private final class CotizacionFormViewModel {
                     total: l.total,
                     tasaItbms: l.tasaItbms
                 )
-            }
+            },
+            cuentaBancariaId: nil,
+            montoPagado: nil,
+            fechaPago: nil,
+            estadoFe: nil,
+            numeroDocumentoFiscal: nil,
+            cufe: nil,
+            qrUrl: nil,
+            retencionItbms: retencionItbms,
+            montoPorCobrar: nil
         )
     }
 }
 
-struct CotizacionFormView: View {
+struct FacturaFormView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var vm = CotizacionFormViewModel()
+    @State private var vm: FacturaFormViewModel
 
-    let existingId: Int64?
+    let prefilledDto: FacturaDto?
+    let reporteMantenimientoId: Int64?
     let onClose: (Bool) -> Void
 
     @State private var isSubmitting = false
@@ -109,10 +124,13 @@ struct CotizacionFormView: View {
     @State private var showingClientePicker = false
     @State private var showingProductoPicker: IdentifiableUUID?
 
-    init(cotizacion: CotizacionDto?, onClose: @escaping (Bool) -> Void) {
-        self.existingId = cotizacion?.id
+    init(prefilledDto: FacturaDto?,
+         reporteMantenimientoId: Int64? = nil,
+         onClose: @escaping (Bool) -> Void) {
+        self.prefilledDto = prefilledDto
+        self.reporteMantenimientoId = reporteMantenimientoId
         self.onClose = onClose
-        _vm = State(initialValue: CotizacionFormViewModel(cotizacion: cotizacion))
+        _vm = State(initialValue: FacturaFormViewModel(dto: prefilledDto))
     }
 
     var body: some View {
@@ -138,20 +156,21 @@ struct CotizacionFormView: View {
                             Text(m.label).tag(m)
                         }
                     }
+                    Toggle("Retención ITBMS", isOn: $vm.retencionItbms)
                     TextField("Observaciones", text: $vm.observaciones, axis: .vertical)
                         .lineLimit(2...4)
                 }
 
                 Section {
                     ForEach($vm.lineas) { $linea in
-                        LineaFormRow(linea: $linea) {
+                        FacturaLineaFormRow(linea: $linea) {
                             showingProductoPicker = IdentifiableUUID(id: linea.id)
                         }
                     }
                     .onDelete { idx in vm.lineas.remove(atOffsets: idx) }
 
                     Button {
-                        vm.lineas.append(LineaItem())
+                        vm.lineas.append(FacturaLineaItem())
                     } label: {
                         Label("Agregar línea", systemImage: "plus.circle")
                     }
@@ -174,7 +193,7 @@ struct CotizacionFormView: View {
                         .font(.headline)
                 }
             }
-            .navigationTitle(existingId == nil ? "Nueva cotización" : "Editar cotización")
+            .navigationTitle(prefilledDto == nil ? "Nueva factura" : "Confirmar factura")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -214,22 +233,19 @@ struct CotizacionFormView: View {
                    isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
-                   )) {
+                   ),
+                   presenting: errorMessage) { _ in
                 Button("OK") { errorMessage = nil }
-            } message: { Text(errorMessage ?? "") }
+            } message: { msg in Text(msg) }
         }
     }
 
     private func submit() async {
         isSubmitting = true
         defer { isSubmitting = false }
-        let dto = vm.toDto(existingId: existingId)
+        let dto = vm.toDto(reporteMantenimientoId: reporteMantenimientoId)
         do {
-            if let id = existingId {
-                _ = try await APIClient.shared.updateCotizacion(id: id, dto: dto)
-            } else {
-                _ = try await APIClient.shared.createCotizacion(dto)
-            }
+            _ = try await APIClient.shared.createFactura(dto)
             onClose(true)
             dismiss()
         } catch {
@@ -238,10 +254,10 @@ struct CotizacionFormView: View {
     }
 }
 
-// MARK: - Line row inside the form
+// MARK: - Factura line row
 
-private struct LineaFormRow: View {
-    @Binding var linea: LineaItem
+private struct FacturaLineaFormRow: View {
+    @Binding var linea: FacturaLineaItem
     let onPickProducto: () -> Void
 
     @State private var cantidadText: String = ""
@@ -294,16 +310,16 @@ private struct LineaFormRow: View {
                 }
             }
         }
+        .padding(.vertical, 4)
+        .onAppear {
+            cantidadText = linea.cantidad == 1 ? "1" : String(format: "%.2f", linea.cantidad)
+            precioText = linea.precioVenta == 0 ? "" : String(format: "%.2f", linea.precioVenta)
+        }
         .onChange(of: linea.precioVenta) { _, v in
             precioText = v == 0 ? "" : String(format: "%.2f", v)
         }
         .onChange(of: linea.cantidad) { _, v in
             cantidadText = v == 1 ? "1" : String(format: "%.2f", v)
-        }
-        .padding(.vertical, 4)
-        .onAppear {
-            cantidadText = linea.cantidad == 1 ? "1" : String(format: "%.2f", linea.cantidad)
-            precioText = linea.precioVenta == 0 ? "" : String(format: "%.2f", linea.precioVenta)
         }
     }
 }
