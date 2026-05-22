@@ -383,10 +383,15 @@ final class APIClient {
         return try await perform(req, as: Page<ProductoDto>.self)
     }
 
-    func searchProductos(term: String) async throws -> [ProductoDto] {
-        let items = [URLQueryItem(name: "term", value: term)]
+    func searchProductos(term: String, page: Int = 0, size: Int = 30) async throws -> [ProductoDto] {
+        let items = [
+            URLQueryItem(name: "term", value: term),
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "size", value: "\(size)")
+        ]
         let req = try makeRequest(path: "productos/search", method: "GET", query: items)
-        return try await perform(req, as: [ProductoDto].self)
+        let p = try await perform(req, as: Page<ProductoDto>.self)
+        return p.content
     }
 
     func createProducto(_ dto: ProductoDto) async throws -> ProductoDto {

@@ -15,7 +15,25 @@ final class CotizacionesListViewModel {
         defer { isLoading = false }
         do {
             let page = try await APIClient.shared.listCotizaciones(searchTerm: search, size: 50)
-            self.cotizaciones = page.content
+            var list = page.content
+
+            let needsName = list.contains { $0.clienteEmpresa == nil && $0.clienteSubEmpresa == nil && $0.clienteId != nil }
+            if needsName {
+                let clientPage = try await APIClient.shared.listClientes(size: 500)
+                let clientMap = Dictionary(uniqueKeysWithValues: clientPage.content.compactMap { c in
+                    c.id.map { ($0, c) }
+                })
+                list = list.map { c in
+                    guard c.clienteEmpresa == nil, c.clienteSubEmpresa == nil,
+                          let id = c.clienteId, let client = clientMap[id] else { return c }
+                    var updated = c
+                    updated.clienteEmpresa = client.empresa
+                    updated.clienteSubEmpresa = client.subEmpresa
+                    return updated
+                }
+            }
+
+            self.cotizaciones = list
         } catch {
             errorMessage = error.localizedDescription
         }

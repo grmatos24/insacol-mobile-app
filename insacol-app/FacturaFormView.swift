@@ -77,7 +77,7 @@ private final class FacturaFormViewModel {
             serie: nil,
             fecha: fecha.apiDateString,
             subtotal: subtotal,
-            descuento: descuento > 0 ? descuento : nil,
+            descuento: descuento,
             impuestos: totalItbms,
             total: total,
             formaPago: formaPago.rawValue,
@@ -269,7 +269,7 @@ private struct FacturaLineaFormRow: View {
                 HStack {
                     Text(linea.productoNombre.isEmpty ? "Seleccionar producto" : linea.productoNombre)
                         .foregroundStyle(linea.productoNombre.isEmpty ? .secondary : .primary)
-                        .lineLimit(1)
+                        .lineLimit(linea.productoNombre.isEmpty ? 1 : nil)
                     Spacer()
                     Image(systemName: "chevron.right").foregroundStyle(.secondary).font(.caption)
                 }

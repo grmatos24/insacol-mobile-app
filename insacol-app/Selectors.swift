@@ -288,33 +288,34 @@ struct ExtintorClientePickerView: View {
 
 struct ProductoSelectorView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var productos: [ProductoDto] = []
     @State private var search: String = ""
-    @State private var resultados: [ProductoDto] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var searchTask: Task<Void, Never>?
 
     let onPick: (ProductoDto) -> Void
+
+    var filtered: [ProductoDto] {
+        let q = search.lowercased().trimmingCharacters(in: .whitespaces)
+        if q.isEmpty { return productos }
+        return productos.filter { p in
+            (p.nombre?.lowercased().contains(q) ?? false)
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if isLoading {
+                if isLoading && productos.isEmpty {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if resultados.isEmpty && !search.isEmpty {
+                } else if filtered.isEmpty {
                     ContentUnavailableView(
-                        "Sin resultados",
-                        systemImage: "magnifyingglass",
-                        description: Text("No se encontraron productos para \"\(search)\".")
-                    )
-                } else if resultados.isEmpty {
-                    ContentUnavailableView(
-                        "Buscar producto",
+                        search.isEmpty ? "Sin productos" : "Sin resultados",
                         systemImage: "shippingbox",
-                        description: Text("Escribe el nombre del producto.")
+                        description: search.isEmpty ? nil : Text("No se encontraron productos para \"\(search)\".")
                     )
                 } else {
-                    List(resultados) { p in
+                    List(filtered) { p in
                         Button {
                             onPick(p)
                             dismiss()
@@ -342,14 +343,6 @@ struct ProductoSelectorView: View {
                 }
             }
             .searchable(text: $search, prompt: "Buscar producto")
-            .onChange(of: search) { _, q in
-                searchTask?.cancel()
-                searchTask = Task {
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    guard !Task.isCancelled else { return }
-                    await runSearch(q)
-                }
-            }
             .navigationTitle("Seleccionar producto")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -359,29 +352,26 @@ struct ProductoSelectorView: View {
                     Button("Cancelar") { dismiss() }
                 }
             }
+            .task {
+                guard productos.isEmpty else { return }
+                isLoading = true
+                defer { isLoading = false }
+                do {
+                    let page = try await APIClient.shared.listProductos(size: 500)
+                    productos = page.content.sorted {
+                        ($0.nombre ?? "").localizedCaseInsensitiveCompare($1.nombre ?? "") == .orderedAscending
+                    }
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
             .alert("Error",
                    isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                    )) {
-                Button("OK", role: .cancel) { errorMessage = nil }
+                Button("OK") { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
-        }
-    }
-
-    private func runSearch(_ term: String) async {
-        guard !term.trimmingCharacters(in: .whitespaces).isEmpty else {
-            resultados = []
-            return
-        }
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            resultados = try await APIClient.shared.searchProductos(term: term)
-        } catch {
-            if !(error is CancellationError) {
-                errorMessage = error.localizedDescription
-            }
         }
     }
 }

@@ -42,7 +42,9 @@
       "Bash(curl -s \"http://192.168.1.21:8080/facturas/2888/pdf\" -H \"Authorization: Bearer test\")",
       "Bash(curl -s \"http://192.168.1.21:8080/facturas/2888/xml\" -H \"Authorization: Bearer test\")",
       "Bash(curl -s \"http://192.168.1.21:8080/facturas/2888/fe/pdf\" -H \"Authorization: Bearer test\")",
-      "Bash(curl -s \"http://192.168.1.21:8080/facturas/2888/fe/emitir\" -X POST -H \"Authorization: Bearer test\")"
+      "Bash(curl -s \"http://192.168.1.21:8080/facturas/2888/fe/emitir\" -X POST -H \"Authorization: Bearer test\")",
+      "Bash(curl -s -X POST http://192.168.1.21:8080/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"guillermo\",\"password\":\"1234\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('jwt:', d.get\\('jwt',''\\)[:40], '| status:', d.get\\('status'\\)\\)\")"
     ]
   }
 }

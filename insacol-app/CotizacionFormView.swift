@@ -37,6 +37,8 @@ private final class CotizacionFormViewModel {
     var observaciones: String = ""
     var descuento: Double = 0
     var lineas: [LineaItem] = []
+    var serie: String? = nil
+    var facturada: Bool? = nil
 
     var subtotal: Double { lineas.reduce(0) { $0 + $1.total } }
     var totalItbms: Double { lineas.reduce(0) { $0 + $1.itbmsAmount } }
@@ -58,6 +60,8 @@ private final class CotizacionFormViewModel {
         formaPago = MetodoPago(rawValue: dto.formaPago ?? "") ?? .efectivo
         observaciones = dto.observaciones ?? ""
         descuento = dto.descuento ?? 0
+        serie = dto.serie
+        facturada = dto.facturada
         lineas = (dto.detalles ?? []).map { d in
             var l = LineaItem()
             l.productoId = d.productoId
@@ -74,13 +78,15 @@ private final class CotizacionFormViewModel {
         CotizacionDto(
             id: existingId,
             clienteId: clienteId,
+            serie: serie,
             fecha: fecha.apiDateString,
             subtotal: subtotal,
-            descuento: descuento > 0 ? descuento : nil,
+            descuento: descuento,
             impuestos: totalItbms,
             total: total,
             formaPago: formaPago.rawValue,
             observaciones: observaciones.isEmpty ? nil : observaciones,
+            facturada: facturada,
             detalles: lineas.map { l in
                 CotizacionDetalleDto(
                     id: nil,
@@ -253,7 +259,7 @@ private struct LineaFormRow: View {
                 HStack {
                     Text(linea.productoNombre.isEmpty ? "Seleccionar producto" : linea.productoNombre)
                         .foregroundStyle(linea.productoNombre.isEmpty ? .secondary : .primary)
-                        .lineLimit(1)
+                        .lineLimit(linea.productoNombre.isEmpty ? 1 : nil)
                     Spacer()
                     Image(systemName: "chevron.right").foregroundStyle(.secondary).font(.caption)
                 }
