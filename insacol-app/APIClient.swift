@@ -75,7 +75,7 @@ final class APIClient {
 
     // Backend en Docker, accesible vía la IP LAN del Mac.
     // (En simulador iOS, "localhost" no siempre apunta al Mac host, por eso usamos la IP de la red.)
-    var baseURL: URL = URL(string: "http://192.168.40.238:8080")!
+    var baseURL: URL = URL(string: "http://192.168.1.21:8080")!
 
     private let session: URLSession
     private let encoder: JSONEncoder

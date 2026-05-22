@@ -355,7 +355,7 @@ struct FacturaDto: Codable, Identifiable, Hashable {
     var numeroDocumentoFiscal: String?
     var cufe: String?
     var qrUrl: String?
-    var retencionItbms: Bool?
+    var retencionItbms: Double?
     var montoPorCobrar: Double?
 
     var clienteDisplayName: String {

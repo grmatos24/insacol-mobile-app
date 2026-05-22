@@ -53,7 +53,7 @@ private final class FacturaFormViewModel {
         clienteNombre = dto.clienteDisplayName
         fecha = dto.fecha?.apiDate ?? Date()
         formaPago = MetodoPago(rawValue: dto.formaPago ?? "") ?? .efectivo
-        retencionItbms = dto.retencionItbms ?? false
+        retencionItbms = (dto.retencionItbms ?? 0) > 0
         observaciones = dto.observaciones ?? ""
         descuento = dto.descuento ?? 0
         lineas = (dto.detalles ?? []).map { d in
@@ -105,7 +105,7 @@ private final class FacturaFormViewModel {
             numeroDocumentoFiscal: nil,
             cufe: nil,
             qrUrl: nil,
-            retencionItbms: retencionItbms,
+            retencionItbms: retencionItbms ? 1.0 : 0.0,
             montoPorCobrar: nil
         )
     }
