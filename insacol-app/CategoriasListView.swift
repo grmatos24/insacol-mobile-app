@@ -39,58 +39,23 @@ struct CategoriasListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if vm.isLoading && vm.categorias.isEmpty {
-                    ProgressView("Cargando...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if vm.categorias.isEmpty {
-                    ContentUnavailableView(
-                        "Sin categorías",
-                        systemImage: "list.bullet.rectangle",
-                        description: Text("Toca + para crear tu primera categoría.")
-                    )
-                } else {
-                    List {
-                        ForEach(vm.categorias) { cat in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(cat.nombre).font(.headline)
-                                if let d = cat.descripcion, !d.isEmpty {
-                                    Text(d).font(.subheadline).foregroundStyle(.secondary)
-                                }
-                                HStack(spacing: 6) {
-                                    if cat.esCompraMercancia == true {
-                                        Tag(text: "Mercancía", color: .blue)
-                                    }
-                                    if cat.esMerma == true {
-                                        Tag(text: "Merma", color: .orange)
-                                    }
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { editing = cat }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    Task { await vm.delete(cat) }
-                                } label: {
-                                    Label("Eliminar", systemImage: "trash")
-                                }
-                                Button {
-                                    editing = cat
-                                } label: {
-                                    Label("Editar", systemImage: "pencil")
-                                }
-                                .tint(.blue)
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable { await vm.load() }
-                }
+            ZStack {
+                Theme.surface.ignoresSafeArea()
+                contentView
             }
             .navigationTitle("Categorías")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingAdd = true } label: {
+                        Image(systemName: "plus")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.navy)
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel("Nueva categoría")
                 }
             }
             .task { await vm.load() }
@@ -115,6 +80,96 @@ struct CategoriasListView: View {
                 Text(vm.errorMessage ?? "")
             })
         }
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if vm.isLoading && vm.categorias.isEmpty {
+            ProgressView("Cargando...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if vm.categorias.isEmpty {
+            ContentUnavailableView(
+                "Sin categorías",
+                systemImage: "list.bullet.rectangle",
+                description: Text("Toca + para crear tu primera categoría.")
+            )
+        } else {
+            List {
+                ForEach(vm.categorias) { cat in
+                    CategoriaRow(categoria: cat)
+                        .contentShape(Rectangle())
+                        .onTapGesture { editing = cat }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                Task { await vm.delete(cat) }
+                            } label: {
+                                Label("Eliminar", systemImage: "trash")
+                            }
+                            Button { editing = cat } label: {
+                                Label("Editar", systemImage: "pencil")
+                            }
+                            .tint(.blue)
+                        }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .refreshable { await vm.load() }
+        }
+    }
+}
+
+private struct CategoriaRow: View {
+    let categoria: CategoriaGastoDto
+
+    var body: some View {
+        BrandCard(padding: 14, radius: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(categoria.nombre)
+                            .font(.headline)
+                            .foregroundStyle(Theme.navyText)
+                            .lineLimit(1)
+                        if let d = categoria.descripcion, !d.isEmpty {
+                            Text(d)
+                                .font(.caption)
+                                .foregroundStyle(Theme.textMuted)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                }
+
+                let hasTags = categoria.esCompraMercancia == true || categoria.esMerma == true
+                if hasTags {
+                    dottedDivider
+                    HStack(spacing: 6) {
+                        if categoria.esCompraMercancia == true {
+                            Tag(text: "Mercancía", color: Theme.info)
+                        }
+                        if categoria.esMerma == true {
+                            Tag(text: "Merma", color: .orange)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var dottedDivider: some View {
+        GeometryReader { g in
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: g.size.width, y: 0))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .foregroundColor(Theme.divider)
+        }
+        .frame(height: 1)
     }
 }
 

@@ -7,35 +7,41 @@ struct LoginView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
+        ZStack {
+            Theme.navy.ignoresSafeArea()
+
+            VStack(spacing: 24) {
                 Spacer()
 
                 Image("Logo")
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: 260, maxHeight: 140)
+                    .frame(maxWidth: 220, maxHeight: 120)
                     .padding(.horizontal)
 
                 Text("Iniciar sesión")
                     .font(.headline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.7))
 
                 VStack(spacing: 12) {
                     usernameField
-
                     SecureField("Contraseña", text: $password)
                         .textContentType(.password)
+                        .foregroundStyle(.white)
                         .padding()
-                        .background(Color.gray.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        )
                 }
                 .padding(.horizontal)
 
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.callout)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color(hex: "#FF453A"))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
@@ -43,16 +49,16 @@ struct LoginView: View {
                 Button {
                     Task { await submit() }
                 } label: {
-                    HStack {
-                        if isLoading { ProgressView().tint(.white) }
+                    HStack(spacing: 8) {
+                        if isLoading { ProgressView().tint(.black) }
                         Text(isLoading ? "Ingresando..." : "Ingresar")
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(canSubmit ? Color.accentColor : Color.gray)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .background(canSubmit ? Theme.amberGradient : LinearGradient(colors: [.gray], startPoint: .leading, endPoint: .trailing))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .disabled(!canSubmit || isLoading)
                 .padding(.horizontal)
@@ -64,12 +70,17 @@ struct LoginView: View {
     }
 
     private var usernameField: some View {
-        let field = TextField("Correo", text: $username)
+        let field = TextField("Correo / Usuario", text: $username)
             .textContentType(.username)
             .autocorrectionDisabled()
+            .foregroundStyle(.white)
             .padding()
-            .background(Color.gray.opacity(0.15))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
         #if os(iOS) || os(visionOS)
         return field
             .keyboardType(.emailAddress)

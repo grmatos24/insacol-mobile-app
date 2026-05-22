@@ -43,49 +43,25 @@ struct ProductosListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if vm.isLoading && vm.productos.isEmpty {
-                    ProgressView("Cargando...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if vm.productos.isEmpty {
-                    ContentUnavailableView(
-                        "Sin productos",
-                        systemImage: "shippingbox",
-                        description: Text(vm.search.isEmpty
-                            ? "Toca + para agregar el primer producto."
-                            : "No hay resultados para \"\(vm.search)\".")
-                    )
-                } else {
-                    List {
-                        ForEach(vm.productos) { p in
-                            ProductoRow(producto: p)
-                                .contentShape(Rectangle())
-                                .onTapGesture { editing = p }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        toDelete = p
-                                    } label: {
-                                        Label("Eliminar", systemImage: "trash")
-                                    }
-                                    Button {
-                                        editing = p
-                                    } label: {
-                                        Label("Editar", systemImage: "pencil")
-                                    }
-                                    .tint(.blue)
-                                }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable { await vm.load() }
-                }
+            ZStack {
+                Theme.surface.ignoresSafeArea()
+                contentView
             }
             .navigationTitle("Productos")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $vm.search, prompt: "Buscar producto")
             .onChange(of: vm.search) { _, _ in Task { await vm.load() } }
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingAdd = true } label: {
+                        Image(systemName: "plus")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.navy)
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel("Nuevo producto")
                 }
             }
             .task { await vm.load() }
@@ -121,32 +97,91 @@ struct ProductosListView: View {
             } message: { Text(vm.errorMessage ?? "") }
         }
     }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if vm.isLoading && vm.productos.isEmpty {
+            ProgressView("Cargando...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if vm.productos.isEmpty {
+            ContentUnavailableView(
+                "Sin productos",
+                systemImage: "shippingbox",
+                description: Text(vm.search.isEmpty
+                    ? "Toca + para agregar el primer producto."
+                    : "No hay resultados para \"\(vm.search)\".")
+            )
+        } else {
+            List {
+                ForEach(vm.productos) { p in
+                    ProductoRow(producto: p)
+                        .contentShape(Rectangle())
+                        .onTapGesture { editing = p }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) { toDelete = p } label: {
+                                Label("Eliminar", systemImage: "trash")
+                            }
+                            Button { editing = p } label: {
+                                Label("Editar", systemImage: "pencil")
+                            }
+                            .tint(.blue)
+                        }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .refreshable { await vm.load() }
+        }
+    }
 }
 
 private struct ProductoRow: View {
     let producto: ProductoDto
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(producto.nombre ?? "Producto").font(.headline)
-                if let tipo = producto.tipoProducto {
-                    Text(tipo == "SERVICIO" ? "Servicio" : "Producto")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.purple.opacity(0.15))
-                        .foregroundStyle(.purple)
-                        .clipShape(Capsule())
+        BrandCard(padding: 14, radius: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(producto.nombre ?? "Producto")
+                        .font(.headline)
+                        .foregroundStyle(Theme.navyText)
+                        .lineLimit(2)
+                    Spacer()
+                    if let tipo = producto.tipoProducto {
+                        StatusBadge(
+                            text: tipo == "SERVICIO" ? "SERVICIO" : "PRODUCTO",
+                            color: .purple
+                        )
+                    }
+                }
+
+                dottedDivider
+
+                HStack {
+                    Spacer()
+                    if let precio = producto.precio {
+                        Text(precio.currencyString)
+                            .font(.headline.bold())
+                            .foregroundStyle(Theme.amberDark)
+                    }
                 }
             }
-            Spacer()
-            if let precio = producto.precio {
-                Text(precio.currencyString)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
         }
-        .padding(.vertical, 2)
+    }
+
+    private var dottedDivider: some View {
+        GeometryReader { g in
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: g.size.width, y: 0))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .foregroundColor(Theme.divider)
+        }
+        .frame(height: 1)
     }
 }
 

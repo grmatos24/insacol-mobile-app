@@ -39,55 +39,27 @@ struct GastosListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if vm.isLoading && vm.gastos.isEmpty {
-                    ProgressView("Cargando...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if vm.gastos.isEmpty {
-                    ContentUnavailableView(
-                        "Sin gastos",
-                        systemImage: "tray",
-                        description: Text("Toca el botón + para registrar tu primer gasto.")
-                    )
-                } else {
-                    List {
-                        ForEach(vm.gastos) { gasto in
-                            GastoRow(gasto: gasto)
-                                .contentShape(Rectangle())
-                                .onTapGesture { editingGasto = gasto }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    if !(gasto.anulado ?? false) {
-                                        Button(role: .destructive) {
-                                            gastoToAnular = gasto
-                                        } label: {
-                                            Label("Anular", systemImage: "xmark.circle")
-                                        }
-                                    }
-                                    Button {
-                                        editingGasto = gasto
-                                    } label: {
-                                        Label("Editar", systemImage: "pencil")
-                                    }
-                                    .tint(.blue)
-                                }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable { await vm.load() }
-                }
+            ZStack {
+                Theme.surface.ignoresSafeArea()
+                contentView
             }
             .navigationTitle("Gastos")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $vm.searchTerm, prompt: "Buscar...")
             .onChange(of: vm.searchTerm) { _, _ in
                 Task { await vm.load() }
             }
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingAdd = true
-                    } label: {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingAdd = true } label: {
                         Image(systemName: "plus")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.navy)
+                            .clipShape(Circle())
                     }
+                    .accessibilityLabel("Nuevo gasto")
                 }
             }
             .task { await vm.load() }
@@ -128,68 +100,127 @@ struct GastosListView: View {
             })
         }
     }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if vm.isLoading && vm.gastos.isEmpty {
+            ProgressView("Cargando...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if vm.gastos.isEmpty {
+            ContentUnavailableView(
+                "Sin gastos",
+                systemImage: "tray",
+                description: Text("Toca + para registrar tu primer gasto.")
+            )
+        } else {
+            List {
+                ForEach(vm.gastos) { gasto in
+                    GastoRow(gasto: gasto)
+                        .contentShape(Rectangle())
+                        .onTapGesture { editingGasto = gasto }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if !(gasto.anulado ?? false) {
+                                Button(role: .destructive) {
+                                    gastoToAnular = gasto
+                                } label: {
+                                    Label("Anular", systemImage: "xmark.circle")
+                                }
+                            }
+                            Button { editingGasto = gasto } label: {
+                                Label("Editar", systemImage: "pencil")
+                            }
+                            .tint(.blue)
+                        }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .refreshable { await vm.load() }
+        }
+    }
 }
 
 private struct GastoRow: View {
     let gasto: GastoDto
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(gasto.proveedor ?? "Sin proveedor")
-                        .font(.headline)
-                        .lineLimit(1)
+        BrandCard(padding: 14, radius: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(gasto.proveedor ?? "Sin proveedor")
+                            .font(.headline)
+                            .foregroundStyle(Theme.navyText)
+                            .lineLimit(1)
+                        Text(gasto.categoriaNombre ?? "—")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    Spacer()
                     if gasto.anulado == true {
-                        Text("ANULADO")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.red.opacity(0.15))
-                            .foregroundStyle(.red)
-                            .clipShape(Capsule())
+                        StatusBadge(text: "ANULADO", color: Theme.danger)
                     }
                 }
-                Text(gasto.categoriaNombre ?? "—")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+
+                dottedDivider
+
                 HStack(spacing: 8) {
-                    if let f = gasto.fechaGasto?.apiDate {
-                        Label(f.displayString, systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 10) {
+                            if let f = gasto.fechaGasto?.apiDate {
+                                Label(f.displayString, systemImage: "calendar")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                            if let m = gasto.metodoPago {
+                                Label(m.capitalized, systemImage: "creditcard")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                        if gasto.esFondosPersonales == true {
+                            Label("Fondos personales · \(gasto.acreedorNombre ?? "—")",
+                                  systemImage: "person.crop.circle")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .lineLimit(1)
+                        } else if let cb = gasto.cuentaBancariaNombre, !cb.isEmpty {
+                            Label(cb, systemImage: "building.columns")
+                                .font(.caption)
+                                .foregroundStyle(Theme.info)
+                                .lineLimit(1)
+                        }
                     }
-                    if let m = gasto.metodoPago {
-                        Label(m.capitalized, systemImage: "creditcard")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(formatMoney(gasto.total ?? 0))
+                            .font(.headline.bold())
+                            .foregroundStyle(Theme.amberDark)
+                        if let imp = gasto.impuestos, imp > 0 {
+                            Text("ITBMS \(formatMoney(imp))")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.textMuted)
+                        }
                     }
-                }
-                if gasto.esFondosPersonales == true {
-                    Label("Fondos personales · \(gasto.acreedorNombre ?? "—")",
-                          systemImage: "person.crop.circle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                } else if let cb = gasto.cuentaBancariaNombre, !cb.isEmpty {
-                    Label(cb, systemImage: "building.columns")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                        .lineLimit(1)
-                }
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(formatMoney(gasto.total ?? 0))
-                    .font(.headline)
-                if let imp = gasto.impuestos, imp > 0 {
-                    Text("ITBMS \(formatMoney(imp))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.vertical, 4)
         .opacity(gasto.anulado == true ? 0.5 : 1.0)
+    }
+
+    private var dottedDivider: some View {
+        GeometryReader { g in
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: g.size.width, y: 0))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .foregroundColor(Theme.divider)
+        }
+        .frame(height: 1)
     }
 }
 

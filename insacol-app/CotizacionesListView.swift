@@ -128,17 +128,25 @@ struct CotizacionesListView: View {
                         onEliminar: { toDelete = c },
                         onPdf: { Task { await descargarPdf(c) } }
                     )
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .refreshable { await vm.load() }
         }
     }
 
     var body: some View {
         NavigationStack {
-            contentView
+            ZStack {
+                Theme.surface.ignoresSafeArea()
+                contentView
+            }
             .navigationTitle("Cotizaciones")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $vm.search, prompt: "Buscar cliente")
             .onChange(of: vm.search) { _, _ in
                 searchTask?.cancel()
@@ -255,35 +263,55 @@ private struct CotizacionRow: View {
     let cotizacion: CotizacionDto
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(cotizacion.clienteDisplayName).font(.headline).lineLimit(1)
-                HStack(spacing: 8) {
-                    if let s = cotizacion.serie, !s.isEmpty {
-                        Text(s).font(.caption).foregroundStyle(.secondary)
+        BrandCard(padding: 14, radius: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(cotizacion.clienteDisplayName)
+                            .font(.headline)
+                            .foregroundStyle(Theme.navyText)
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            if let s = cotizacion.serie, !s.isEmpty {
+                                Text(s).font(.caption).foregroundStyle(Theme.textMuted)
+                            }
+                            if let f = cotizacion.fecha?.apiDate {
+                                Text("· \(f.displayString)").font(.caption).foregroundStyle(Theme.textMuted)
+                            }
+                        }
                     }
-                    if let f = cotizacion.fecha?.apiDate {
-                        Label(f.displayString, systemImage: "calendar")
-                            .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    if let facturada = cotizacion.facturada {
+                        StatusBadge(
+                            text: facturada ? "FACTURADA" : "PENDIENTE",
+                            color: facturada ? .gray : Theme.amberDark
+                        )
                     }
                 }
-                if let facturada = cotizacion.facturada {
-                    let color: Color = facturada ? .green : .orange
-                    Text(facturada ? "FACTURADA" : "PENDIENTE")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(color.opacity(0.15))
-                        .foregroundStyle(color)
-                        .clipShape(Capsule())
+
+                dottedDivider
+
+                HStack {
+                    Spacer()
+                    if let total = cotizacion.total {
+                        Text(total.currencyString)
+                            .font(.headline.bold())
+                            .foregroundStyle(Theme.amberDark)
+                    }
                 }
-            }
-            Spacer()
-            if let total = cotizacion.total {
-                Text(total.currencyString)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
             }
         }
-        .padding(.vertical, 4)
+    }
+
+    private var dottedDivider: some View {
+        GeometryReader { g in
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: g.size.width, y: 0))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .foregroundColor(Theme.divider)
+        }
+        .frame(height: 1)
     }
 }

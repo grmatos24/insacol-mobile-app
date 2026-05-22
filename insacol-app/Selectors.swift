@@ -126,33 +126,56 @@ struct ExtintorCatalogoPickerView: View {
     @State private var cache = CatalogCache.shared
     @State private var search: String = ""
     @State private var isLoading = false
+    @State private var selectedTipoId: Int64? = nil
+    @State private var selectedCapacidadId: Int64? = nil
 
     var filtered: [ExtintorDto] {
         let q = search.lowercased().trimmingCharacters(in: .whitespaces)
-        let sorted = cache.extintores.sorted {
-            cache.displayName(for: $0).localizedCaseInsensitiveCompare(cache.displayName(for: $1)) == .orderedAscending
-        }
-        guard !q.isEmpty else { return sorted }
-        return sorted.filter { ext in
-            cache.displayName(for: ext).lowercased().contains(q)
-        }
+        return cache.extintores
+            .filter { ext in
+                if let t = selectedTipoId, ext.tipoId != t { return false }
+                if let c = selectedCapacidadId, ext.capacidadId != c { return false }
+                if q.isEmpty { return true }
+                return cache.displayName(for: ext).lowercased().contains(q)
+            }
+            .sorted {
+                cache.displayName(for: $0).localizedCaseInsensitiveCompare(cache.displayName(for: $1)) == .orderedAscending
+            }
+    }
+
+    private var availableTipos: [(Int64, String)] {
+        let ids = Set(cache.extintores.compactMap(\.tipoId))
+        return ids.compactMap { id in cache.tipos[id].map { (id, $0) } }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+    }
+
+    private var availableCapacidades: [(Int64, String)] {
+        let ids = Set(cache.extintores.filter { selectedTipoId == nil || $0.tipoId == selectedTipoId }.compactMap(\.capacidadId))
+        return ids.compactMap { id in cache.capacidades[id].map { (id, $0) } }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
     }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading && cache.extintores.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if filtered.isEmpty {
-                    ContentUnavailableView("Sin coincidencias", systemImage: "flame.slash")
-                } else {
-                    List(filtered) { ext in
-                        Button {
-                            onPick(ext, cache.displayName(for: ext))
-                            dismiss()
-                        } label: {
-                            Text(cache.displayName(for: ext))
-                                .foregroundStyle(.primary)
+            VStack(spacing: 0) {
+                if !cache.extintores.isEmpty {
+                    filterChips
+                }
+                Group {
+                    if isLoading && cache.extintores.isEmpty {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if filtered.isEmpty {
+                        ContentUnavailableView("Sin coincidencias", systemImage: "flame.slash")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(filtered) { ext in
+                            Button {
+                                onPick(ext, cache.displayName(for: ext))
+                                dismiss()
+                            } label: {
+                                Text(cache.displayName(for: ext))
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
                 }
@@ -173,6 +196,69 @@ struct ExtintorCatalogoPickerView: View {
                 isLoading = false
             }
         }
+    }
+
+    private var filterChips: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(availableTipos, id: \.0) { id, nombre in
+                        FilterChip(
+                            label: nombre,
+                            isSelected: selectedTipoId == id,
+                            action: {
+                                if selectedTipoId == id {
+                                    selectedTipoId = nil
+                                } else {
+                                    selectedTipoId = id
+                                    if let current = selectedCapacidadId,
+                                       !availableCapacidades.contains(where: { $0.0 == current }) {
+                                        selectedCapacidadId = nil
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            if !availableCapacidades.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(availableCapacidades, id: \.0) { id, label in
+                            FilterChip(
+                                label: label,
+                                isSelected: selectedCapacidadId == id,
+                                action: { selectedCapacidadId = selectedCapacidadId == id ? nil : id }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                }
+            }
+            Divider()
+        }
+    }
+}
+
+private struct FilterChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Theme.navy : Color.black.opacity(0.06))
+                .foregroundStyle(isSelected ? Color.white : Theme.navyText)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

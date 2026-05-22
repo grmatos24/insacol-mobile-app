@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - ViewModel (sin cambios)
+
 @MainActor
 @Observable
 final class ReportesMantenimientoListViewModel {
@@ -13,22 +15,18 @@ final class ReportesMantenimientoListViewModel {
     var fechaInicio: Date? = nil
     var fechaFin: Date? = nil
 
-    /// Si el usuario no fijó fechas en el sheet de filtros, devolvemos el rango
-    /// apropiado para el tab seleccionado.
     private func effectiveDateRange() -> (Date, Date) {
         if let i = fechaInicio, let f = fechaFin { return (i, f) }
         let cal = Calendar.current
         let now = Date()
         switch filter {
         case .mesActual, .proximoMes:
-            // Mes actual completo (1er día → último día del mes)
             let comps = cal.dateComponents([.year, .month], from: now)
             let inicio = cal.date(from: comps) ?? now
             let nextMonth = cal.date(byAdding: .month, value: 1, to: inicio) ?? now
             let fin = cal.date(byAdding: .day, value: -1, to: nextMonth) ?? now
             return (inicio, fin)
         case .todos:
-            // Rango muy amplio para traer todo
             let inicio = cal.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? now
             let fin = cal.date(from: DateComponents(year: 2099, month: 12, day: 31)) ?? now
             return (inicio, fin)
@@ -49,7 +47,6 @@ final class ReportesMantenimientoListViewModel {
                 page: 0,
                 size: 100
             )
-            // Solo cargamos clientes si todavía no los tenemos (cache simple)
             if clientesById.isEmpty {
                 async let clientesTask = APIClient.shared.listClientes(size: 500)
                 let (page, cPage) = try await (reportesTask, clientesTask)
@@ -86,6 +83,8 @@ final class ReportesMantenimientoListViewModel {
     }
 }
 
+// MARK: - View
+
 struct ReportesMantenimientoListView: View {
     @State private var vm = ReportesMantenimientoListViewModel()
     @State private var showingAdd = false
@@ -104,6 +103,166 @@ struct ReportesMantenimientoListView: View {
         let dto: FacturaDto
         let reporteId: Int64
     }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.surface.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    Picker("Filtro", selection: Binding(
+                        get: { vm.filter },
+                        set: { vm.filter = $0; Task { await vm.load() } }
+                    )) {
+                        Text("Mes actual").tag(APIClient.ReporteFilter.mesActual)
+                        Text("Programados").tag(APIClient.ReporteFilter.proximoMes)
+                        Text("Todos").tag(APIClient.ReporteFilter.todos)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                    contentView
+                }
+            }
+            .navigationTitle("Mantenimiento")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $vm.search, prompt: "Buscar cliente")
+            .onChange(of: vm.search) { _, _ in Task { await vm.load() } }
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showingFilters = true } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                    Button { showingAdd = true } label: {
+                        Image(systemName: "plus")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.navy)
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel("Nuevo reporte")
+                }
+            }
+            .task { await vm.load() }
+            .sheet(isPresented: $showingAdd) {
+                ReporteMantenimientoFormView(reporte: nil) { saved in
+                    if saved { Task { await vm.load() } }
+                }
+            }
+            .sheet(item: $editing) { r in
+                ReporteMantenimientoFormView(reporte: r) { saved in
+                    if saved { Task { await vm.load() } }
+                }
+            }
+            .sheet(item: $cloningFrom) { r in
+                ReporteMantenimientoFormView(reporte: nil, cloneFrom: r) { saved in
+                    if saved { Task { await vm.load() } }
+                }
+            }
+            .sheet(isPresented: $showingFilters) {
+                FiltersSheet(
+                    fechaInicio: $vm.fechaInicio,
+                    fechaFin: $vm.fechaFin,
+                    onApply: { Task { await vm.load() } }
+                )
+            }
+            .sheet(item: $pdfToShare) { item in
+                PDFShareSheet(data: item.data, suggestedName: item.suggestedName ?? "Reporte.pdf")
+            }
+            .sheet(item: $preFacturaItem) { item in
+                FacturaFormView(prefilledDto: item.dto, reporteMantenimientoId: item.reporteId) { saved in
+                    preFacturaItem = nil
+                    if saved { Task { await vm.load() } }
+                }
+            }
+            .alert("¿Eliminar reporte?",
+                   isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }),
+                   presenting: toDelete) { r in
+                Button("Cancelar", role: .cancel) { toDelete = nil }
+                Button("Eliminar", role: .destructive) {
+                    let target = r; toDelete = nil
+                    Task { await vm.delete(target) }
+                }
+            } message: { _ in Text("Esta acción no se puede deshacer.") }
+            .alert("Error",
+                   isPresented: Binding(get: { vm.errorMessage != nil }, set: { if !$0 { vm.errorMessage = nil } })) {
+                Button("OK") { vm.errorMessage = nil }
+            } message: { Text(vm.errorMessage ?? "") }
+        }
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var contentView: some View {
+        Group {
+            if vm.isLoading && vm.reportes.isEmpty {
+                ProgressView("Cargando...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if vm.reportes.isEmpty {
+                ContentUnavailableView(
+                    "Sin reportes",
+                    systemImage: "wrench.and.screwdriver",
+                    description: Text("Toca + para crear un reporte de mantenimiento.")
+                )
+            } else {
+                List {
+                    ForEach(vm.reportes) { r in
+                        ReporteCardRow(
+                            reporte: r,
+                            clienteName: vm.displayName(for: r),
+                            isGeneratingFactura: generandoFacturaId == r.id,
+                            isDownloadingPdf: descargandoPdfId == r.id,
+                            onTap: { editing = r },
+                            onFacturar: { Task { await generarPreFactura(r) } },
+                            onPdf: { Task { await descargarPdf(r) } }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if r.estado != .facturado {
+                                Button(role: .destructive) {
+                                    toDelete = r
+                                } label: {
+                                    Label("Eliminar", systemImage: "trash")
+                                }
+                            }
+                            Button { editing = r } label: {
+                                if r.estado == .facturado {
+                                    Label("Ver", systemImage: "eye")
+                                } else {
+                                    Label("Editar", systemImage: "pencil")
+                                }
+                            }
+                            .tint(.blue)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            if isFromPreviousYear(r) {
+                                Button {
+                                    Task { await iniciarMantenimiento(r) }
+                                } label: {
+                                    if iniciandoMantenimientoId == r.id {
+                                        ProgressView()
+                                    } else {
+                                        Label("Iniciar mantenimiento", systemImage: "wrench.adjustable")
+                                    }
+                                }
+                                .tint(.green)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .refreshable { await vm.load() }
+            }
+        }
+    }
+
+    // MARK: - Helpers
 
     private func descargarPdf(_ r: ReporteMantenimientoDto) async {
         guard let id = r.id else { return }
@@ -145,251 +304,108 @@ struct ReportesMantenimientoListView: View {
         iniciandoMantenimientoId = id
         defer { iniciandoMantenimientoId = nil }
         do {
-            // Cargamos el reporte completo (con detalles) para clonarlo
             let full = try await APIClient.shared.getReporte(id: id)
             cloningFrom = full
         } catch {
             vm.errorMessage = error.localizedDescription
         }
     }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("Filtro", selection: Binding(
-                    get: { vm.filter },
-                    set: {
-                        vm.filter = $0
-                        Task { await vm.load() }
-                    }
-                )) {
-                    Text("Mes actual").tag(APIClient.ReporteFilter.mesActual)
-                    Text("Programados").tag(APIClient.ReporteFilter.proximoMes)
-                    Text("Todos").tag(APIClient.ReporteFilter.todos)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.top, 8)
-
-                Group {
-                    if vm.isLoading && vm.reportes.isEmpty {
-                        ProgressView("Cargando...")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if vm.reportes.isEmpty {
-                        ContentUnavailableView(
-                            "Sin reportes",
-                            systemImage: "wrench.and.screwdriver",
-                            description: Text("Toca + para crear un reporte de mantenimiento.")
-                        )
-                    } else {
-                        List {
-                            ForEach(vm.reportes) { r in
-                                ReporteRow(reporte: r, clienteName: vm.displayName(for: r))
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { editing = r }
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        if r.estado != .facturado {
-                                            Button(role: .destructive) {
-                                                toDelete = r
-                                            } label: {
-                                                Label("Eliminar", systemImage: "trash")
-                                            }
-                                        }
-                                        Button {
-                                            editing = r
-                                        } label: {
-                                            if r.estado == .facturado {
-                                                Label("Ver", systemImage: "eye")
-                                            } else {
-                                                Label("Editar", systemImage: "pencil")
-                                            }
-                                        }
-                                        .tint(.blue)
-                                    }
-                                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                        if r.estado != .facturado {
-                                            Button {
-                                                Task { await generarPreFactura(r) }
-                                            } label: {
-                                                if generandoFacturaId == r.id {
-                                                    ProgressView()
-                                                } else {
-                                                    Label("Crear factura",
-                                                          systemImage: "doc.text.fill")
-                                                }
-                                            }
-                                            .tint(.green)
-                                        }
-                                        if isFromPreviousYear(r) {
-                                            Button {
-                                                Task { await iniciarMantenimiento(r) }
-                                            } label: {
-                                                if iniciandoMantenimientoId == r.id {
-                                                    ProgressView()
-                                                } else {
-                                                    Label("Iniciar mantenimiento",
-                                                          systemImage: "wrench.adjustable")
-                                                }
-                                            }
-                                            .tint(.green)
-                                        }
-                                        Button {
-                                            Task { await descargarPdf(r) }
-                                        } label: {
-                                            if descargandoPdfId == r.id {
-                                                ProgressView()
-                                            } else {
-                                                Label("Descargar PDF",
-                                                      systemImage: "square.and.arrow.down")
-                                            }
-                                        }
-                                        .tint(.indigo)
-                                    }
-                            }
-                        }
-                        .listStyle(.plain)
-                        .refreshable { await vm.load() }
-                    }
-                }
-            }
-            .navigationTitle("Mantenimiento")
-            .searchable(text: $vm.search, prompt: "Buscar cliente")
-            .onChange(of: vm.search) { _, _ in
-                Task { await vm.load() }
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingAdd = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingFilters = true
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                    }
-                }
-            }
-            .task { await vm.load() }
-            .sheet(isPresented: $showingAdd) {
-                ReporteMantenimientoFormView(reporte: nil) { saved in
-                    if saved { Task { await vm.load() } }
-                }
-            }
-            .sheet(item: $editing) { r in
-                ReporteMantenimientoFormView(reporte: r) { saved in
-                    if saved { Task { await vm.load() } }
-                }
-            }
-            .sheet(item: $cloningFrom) { r in
-                ReporteMantenimientoFormView(reporte: nil, cloneFrom: r) { saved in
-                    if saved { Task { await vm.load() } }
-                }
-            }
-            .sheet(isPresented: $showingFilters) {
-                FiltersSheet(
-                    fechaInicio: $vm.fechaInicio,
-                    fechaFin: $vm.fechaFin,
-                    onApply: { Task { await vm.load() } }
-                )
-            }
-            .sheet(item: $pdfToShare) { item in
-                PDFShareSheet(
-                    data: item.data,
-                    suggestedName: item.suggestedName ?? "Reporte.pdf"
-                )
-            }
-            .sheet(item: $preFacturaItem) { item in
-                FacturaFormView(
-                    prefilledDto: item.dto,
-                    reporteMantenimientoId: item.reporteId
-                ) { saved in
-                    preFacturaItem = nil
-                    if saved { Task { await vm.load() } }
-                }
-            }
-            .alert("¿Eliminar reporte?",
-                   isPresented: Binding(
-                    get: { toDelete != nil },
-                    set: { if !$0 { toDelete = nil } }
-                   ),
-                   presenting: toDelete) { r in
-                Button("Cancelar", role: .cancel) { toDelete = nil }
-                Button("Eliminar", role: .destructive) {
-                    let target = r
-                    toDelete = nil
-                    Task { await vm.delete(target) }
-                }
-            } message: { _ in
-                Text("Esta acción no se puede deshacer.")
-            }
-            .alert("Error",
-                   isPresented: Binding(
-                    get: { vm.errorMessage != nil },
-                    set: { if !$0 { vm.errorMessage = nil } }
-                   )) {
-                Button("OK") { vm.errorMessage = nil }
-            } message: {
-                Text(vm.errorMessage ?? "")
-            }
-        }
-    }
 }
 
-private struct ReporteRow: View {
+// MARK: - ReporteCardRow
+
+private struct ReporteCardRow: View {
     let reporte: ReporteMantenimientoDto
     let clienteName: String
+    let isGeneratingFactura: Bool
+    let isDownloadingPdf: Bool
+    let onTap: () -> Void
+    let onFacturar: () -> Void
+    let onPdf: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(clienteName)
-                        .font(.headline)
-                        .lineLimit(1)
+        BrandCard(padding: 14, radius: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(clienteName)
+                            .font(.headline)
+                            .foregroundStyle(Theme.navyText)
+                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            if let f = reporte.fechaServicio?.apiDate {
+                                Text(f.displayString)
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                            if let f = reporte.fechaProximoServicio?.apiDate {
+                                Text("· próx \(f.displayString)")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                    }
+                    Spacer()
                     estadoBadge
                 }
-                HStack(spacing: 12) {
-                    if let f = reporte.fechaServicio?.apiDate {
-                        Label(f.displayString, systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+
+                dottedDivider
+
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flame.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(Theme.amberDark)
+                        let n = reporte.detalles?.count ?? 0
+                        Text("\(n) extintor\(n == 1 ? "" : "es")")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.navyText)
                     }
-                    if let f = reporte.fechaProximoServicio?.apiDate {
-                        Label("Próx \(f.displayString)", systemImage: "calendar.badge.clock")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    Spacer()
+                    InlineActionPill(
+                        title: "PDF",
+                        systemImage: isDownloadingPdf ? nil : "square.and.arrow.down",
+                        action: onPdf
+                    )
+                    if reporte.estado != .facturado {
+                        InlineActionPill(
+                            title: isGeneratingFactura ? "..." : "Facturar",
+                            systemImage: isGeneratingFactura ? nil : "doc.text.fill",
+                            fg: .white,
+                            bg: Theme.success,
+                            action: onFacturar
+                        )
                     }
-                }
-                if let n = reporte.detalles?.count, n > 0 {
-                    Label("\(n) extintor\(n == 1 ? "" : "es")",
-                          systemImage: "flame")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
-            Spacer()
         }
-        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+    }
+
+    private var dottedDivider: some View {
+        GeometryReader { g in
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: g.size.width, y: 0))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .foregroundColor(Theme.divider)
+        }
+        .frame(height: 1)
     }
 
     @ViewBuilder
     private var estadoBadge: some View {
         let isFacturado = reporte.estado == .facturado
-        let color: Color = isFacturado ? .green : .orange
-        Text(isFacturado ? "FACTURADO" : "BORRADOR")
-            .font(.caption2.bold())
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
+        StatusBadge(
+            text: isFacturado ? "FACTURADO" : "BORRADOR",
+            color: isFacturado ? Theme.success : Theme.amberDark
+        )
     }
 }
 
-// MARK: - Filters sheet
+// MARK: - FiltersSheet
 
 private struct FiltersSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -408,13 +424,11 @@ private struct FiltersSheet: View {
                 Section("Rango de fechas") {
                     Toggle("Desde", isOn: $useInicio)
                     if useInicio {
-                        DatePicker("Fecha inicio", selection: $localInicio,
-                                   displayedComponents: .date)
+                        DatePicker("Fecha inicio", selection: $localInicio, displayedComponents: .date)
                     }
                     Toggle("Hasta", isOn: $useFin)
                     if useFin {
-                        DatePicker("Fecha fin", selection: $localFin,
-                                   displayedComponents: .date)
+                        DatePicker("Fecha fin", selection: $localFin, displayedComponents: .date)
                     }
                 }
                 Section {
@@ -431,9 +445,7 @@ private struct FiltersSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Aplicar") {
                         fechaInicio = useInicio ? localInicio : nil

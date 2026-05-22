@@ -15,12 +15,8 @@ struct ClienteFormView: View {
     @State private var dvText: String
     @State private var tipoContribuyente: String
     @State private var retieneItbms: Bool
-    @State private var codigoUbicacion: String
-    @State private var provinciaFe: String
-    @State private var distritoFe: String
-    @State private var corregimientoFe: String
-    @State private var direccionFe: String
-    @State private var tipoRucSeleccion: String
+    @State private var rucValidadoHka: Bool
+    @State private var razonSocialHka: String
 
     @State private var isSubmitting = false
     @State private var isConsultandoRuc = false
@@ -39,14 +35,10 @@ struct ClienteFormView: View {
         _celular = State(initialValue: cliente?.celular ?? "")
         _ruc = State(initialValue: cliente?.ruc ?? "")
         _dvText = State(initialValue: cliente?.dv.map(String.init) ?? "")
-        _tipoContribuyente = State(initialValue: cliente?.tipoContribuyente ?? "1")
+        _tipoContribuyente = State(initialValue: cliente?.tipoContribuyente ?? "2")
         _retieneItbms = State(initialValue: cliente?.retieneItbms ?? false)
-        _codigoUbicacion = State(initialValue: cliente?.codigoUbicacion ?? "")
-        _provinciaFe = State(initialValue: cliente?.provinciaFe ?? "")
-        _distritoFe = State(initialValue: cliente?.distritoFe ?? "")
-        _corregimientoFe = State(initialValue: cliente?.corregimientoFe ?? "")
-        _direccionFe = State(initialValue: cliente?.direccionFe ?? "")
-        _tipoRucSeleccion = State(initialValue: "1")
+        _rucValidadoHka = State(initialValue: cliente?.rucValidadoHka ?? false)
+        _razonSocialHka = State(initialValue: cliente?.razonSocialHka ?? "")
         self.onClose = onClose
     }
 
@@ -78,19 +70,37 @@ struct ClienteFormView: View {
                 }
 
                 Section("Fiscal") {
-                    TextField("RUC *", text: $ruc)
-                        .keyboardType(.numberPad)
-                    TextField("DV *", text: $dvText)
-                        .keyboardType(.numberPad)
                     Picker("Tipo contribuyente", selection: $tipoContribuyente) {
-                        Text("Natural").tag("1")
-                        Text("Jurídica").tag("2")
+                        Text("Persona natural").tag("1")
+                        Text("Persona jurídica").tag("2")
+                    }
+                    HStack(spacing: 12) {
+                        TextField("RUC *", text: $ruc)
+                            .keyboardType(.numberPad)
+                        TextField("DV *", text: $dvText)
+                            .keyboardType(.numberPad)
+                            .frame(width: 60)
                     }
                     Toggle("Retiene ITBMS", isOn: $retieneItbms)
-                    Picker("Tipo de RUC", selection: $tipoRucSeleccion) {
-                        Text("Natural").tag("1")
-                        Text("Jurídica").tag("2")
+
+                    // Estado verificación DGI (solo lectura)
+                    HStack(spacing: 8) {
+                        Image(systemName: rucValidadoHka ? "checkmark.seal.fill" : "circle")
+                            .foregroundStyle(rucValidadoHka ? Theme.success : Theme.textMuted)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(rucValidadoHka ? "RUC verificado con DGI" : "RUC no verificado con DGI")
+                                .font(.subheadline)
+                                .foregroundStyle(rucValidadoHka ? Theme.success : Theme.textMuted)
+                            if rucValidadoHka && !razonSocialHka.isEmpty {
+                                Text(razonSocialHka)
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                        Spacer()
                     }
+                    .listRowBackground(rucValidadoHka ? Theme.success.opacity(0.07) : Color.clear)
+
                     Button {
                         Task { await consultarRuc() }
                     } label: {
@@ -100,19 +110,10 @@ struct ClienteFormView: View {
                                 Text("Consultando RUC...")
                             }
                         } else {
-                            Label("Consultar RUC (HKA)", systemImage: "magnifyingglass")
+                            Label("Consultar RUC (DGI/HKA)", systemImage: "magnifyingglass")
                         }
                     }
                     .disabled(ruc.trimmingCharacters(in: .whitespaces).isEmpty || isConsultandoRuc)
-                }
-
-                Section("Facturación electrónica") {
-                    TextField("Código ubicación", text: $codigoUbicacion)
-                    TextField("Provincia", text: $provinciaFe)
-                    TextField("Distrito", text: $distritoFe)
-                    TextField("Corregimiento", text: $corregimientoFe)
-                    TextField("Dirección", text: $direccionFe, axis: .vertical)
-                        .lineLimit(2...4)
                 }
             }
             .navigationTitle(existingId == nil ? "Nuevo cliente" : "Editar cliente")
@@ -149,19 +150,20 @@ struct ClienteFormView: View {
         isConsultandoRuc = true
         defer { isConsultandoRuc = false }
         do {
-            // consultarRuc returns ProveedorDto; ProveedorDto.dv is String?
             let proveedor = try await APIClient.shared.consultarRuc(
                 ruc: ruc.trimmingCharacters(in: .whitespaces),
-                tipoRuc: tipoRucSeleccion
+                tipoRuc: tipoContribuyente
             )
             if let razon = proveedor.razonSocial, !razon.isEmpty {
                 empresa = razon
                 if subEmpresa.isEmpty { subEmpresa = razon }
+                razonSocialHka = razon
             }
             if let d = proveedor.dv { dvText = d }
             if let tipo = proveedor.tipoPersona {
                 tipoContribuyente = tipo == "J" ? "2" : "1"
             }
+            rucValidadoHka = true
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -184,11 +186,8 @@ struct ClienteFormView: View {
             dv: Int(dvText.trimmingCharacters(in: .whitespaces)),
             tipoContribuyente: tipoContribuyente,
             retieneItbms: retieneItbms,
-            codigoUbicacion: codigoUbicacion.isEmpty ? nil : codigoUbicacion,
-            provinciaFe: provinciaFe.isEmpty ? nil : provinciaFe,
-            distritoFe: distritoFe.isEmpty ? nil : distritoFe,
-            corregimientoFe: corregimientoFe.isEmpty ? nil : corregimientoFe,
-            direccionFe: direccionFe.isEmpty ? nil : direccionFe
+            rucValidadoHka: rucValidadoHka ? true : nil,
+            razonSocialHka: razonSocialHka.isEmpty ? nil : razonSocialHka
         )
         do {
             if let id = existingId {
