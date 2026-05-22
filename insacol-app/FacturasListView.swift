@@ -191,7 +191,7 @@ struct FacturasListView: View {
                 List {
                     ForEach(vm.facturas) { f in
                         FacturaRow(factura: f)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 Button {
                                     Task { await descargarPdf(f) }
                                 } label: {
@@ -202,7 +202,8 @@ struct FacturasListView: View {
                                     }
                                 }
                                 .tint(.indigo)
-
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if f.pagado != true && f.anulada != true {
                                     Button(role: .destructive) {
                                         toAnular = f
@@ -210,8 +211,6 @@ struct FacturasListView: View {
                                         Label("Anular", systemImage: "xmark.circle")
                                     }
                                 }
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                 if f.estadoFe == "EMITIDA" {
                                     Button {
                                         Task { await descargarXml(f) }
