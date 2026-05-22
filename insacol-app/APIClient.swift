@@ -175,10 +175,6 @@ final class APIClient {
             guard let http = response as? HTTPURLResponse else {
                 throw APIError.transport(URLError(.badServerResponse))
             }
-            if http.statusCode == 401 {
-                AuthManager.shared.clear()
-                throw APIError.unauthorized
-            }
             if !(200..<300).contains(http.statusCode) {
                 let body = String(data: data, encoding: .utf8) ?? ""
                 throw APIError.http(status: http.statusCode, body: body)
