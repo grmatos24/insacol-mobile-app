@@ -323,7 +323,6 @@ private struct FacturaRow: View {
     }
 
     @ViewBuilder
-    @ViewBuilder
     private var feBadge: some View {
         switch factura.estadoFe {
         case "EMITIDA":
