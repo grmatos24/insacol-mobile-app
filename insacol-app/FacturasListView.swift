@@ -77,7 +77,6 @@ struct FacturasListView: View {
     @State private var toAnular: FacturaDto?
     @State private var toEmitirFe: FacturaDto?
     @State private var descargandoPdfId: Int64?
-    @State private var descargandoFePdfId: Int64?
     @State private var pdfToShare: PDFShareItem?
     @State private var searchTask: Task<Void, Never>?
 
@@ -190,9 +189,9 @@ struct FacturasListView: View {
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if f.estadoFe == "EMITIDA" {
                                     Button {
-                                        Task { await descargarFePdf(f) }
+                                        Task { await descargarPdf(f) }
                                     } label: {
-                                        if descargandoFePdfId == f.id {
+                                        if descargandoPdfId == f.id {
                                             ProgressView()
                                         } else {
                                             Label("PDF FE", systemImage: "checkmark.seal")
@@ -251,21 +250,6 @@ struct FacturasListView: View {
         }
     }
 
-    private func descargarFePdf(_ f: FacturaDto) async {
-        guard let id = f.id else { return }
-        descargandoFePdfId = id
-        defer { descargandoFePdfId = nil }
-        do {
-            let data = try await APIClient.shared.downloadFacturaFePdf(id: id)
-            pdfToShare = PDFShareItem(
-                data: data,
-                id: id,
-                suggestedName: "FacturaFE_\(f.serie ?? String(id)).pdf"
-            )
-        } catch {
-            vm.errorMessage = error.localizedDescription
-        }
-    }
 }
 
 // MARK: - Factura Row

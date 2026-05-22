@@ -502,16 +502,12 @@ final class APIClient {
     }
 
     func emitirFacturaElectronica(id: Int64) async throws -> FacturaDto {
-        let req = try makeRequest(path: "facturas/\(id)/fe/emitir", method: "POST")
+        let req = try makeRequest(path: "facturas/\(id)/emitir-fe", method: "POST")
         return try await perform(req, as: FacturaDto.self)
     }
 
-    func downloadFacturaFePdf(id: Int64) async throws -> Data {
-        return try await downloadData(path: "facturas/\(id)/fe/pdf")
-    }
-
     func downloadFacturaXml(id: Int64) async throws -> Data {
-        return try await downloadData(path: "facturas/\(id)/fe/xml", accept: "application/xml")
+        return try await downloadData(path: "facturas/\(id)/xml", accept: "application/xml")
     }
 
     // MARK: - Reportes de mantenimiento
