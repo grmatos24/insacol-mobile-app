@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Brand colors
+// MARK: - Hex color init
 
 extension Color {
     init(hex: String) {
@@ -22,24 +22,66 @@ extension Color {
     }
 }
 
+// MARK: - UIColor adaptive helper
+
+private extension UIColor {
+    static func adaptive(light: UIColor, dark: UIColor) -> UIColor {
+        UIColor { $0.userInterfaceStyle == .dark ? dark : light }
+    }
+
+    convenience init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r = CGFloat((int >> 16) & 0xFF) / 255
+        let g = CGFloat((int >> 8)  & 0xFF) / 255
+        let b = CGFloat( int        & 0xFF) / 255
+        self.init(red: r, green: g, blue: b, alpha: 1)
+    }
+}
+
+// MARK: - Theme
+
 enum Theme {
-    // Brand
+    // Brand — fixed in both modes
     static let amber     = Color(hex: "#FFC107")
     static let amberDark = Color(hex: "#F59E0B")
     static let navy      = Color(hex: "#0F172A")
     static let navyLight = Color(hex: "#1E293B")
 
-    // Surfaces (Field First — light)
-    static let surface     = Color(hex: "#FAFAF7")
-    static let cardSurface = Color.white
-    static let cardBorder  = Color.black.opacity(0.10)
-    static let divider     = Color.black.opacity(0.08)
+    // Surfaces — adaptive
+    static let surface = Color(UIColor.adaptive(
+        light: UIColor(hex: "#FAFAF7"),
+        dark:  UIColor(hex: "#0A0F1C")          // más oscuro que navy para que las cards resalten
+    ))
 
-    // Text
-    static let navyText  = Color(hex: "#0F172A")
-    static let textMuted = Color(hex: "#3C3C43").opacity(0.6)
+    static let cardSurface = Color(UIColor.adaptive(
+        light: .white,
+        dark:  UIColor(hex: "#1E293B")           // navyLight
+    ))
 
-    // Status
+    static let cardBorder = Color(UIColor.adaptive(
+        light: .black.withAlphaComponent(0.10),
+        dark:  .white.withAlphaComponent(0.12)
+    ))
+
+    static let divider = Color(UIColor.adaptive(
+        light: .black.withAlphaComponent(0.08),
+        dark:  .white.withAlphaComponent(0.10)
+    ))
+
+    // Text — adaptive
+    static let navyText = Color(UIColor.adaptive(
+        light: UIColor(hex: "#0F172A"),
+        dark:  UIColor(hex: "#F1F5F9")
+    ))
+
+    static let textMuted = Color(UIColor.adaptive(
+        light: UIColor(hex: "#3C3C43").withAlphaComponent(0.60),
+        dark:  .white.withAlphaComponent(0.50)
+    ))
+
+    // Status — mismos en ambos modos
     static let success = Color(hex: "#34C759")
     static let warning = Color(hex: "#F59E0B")
     static let danger  = Color(hex: "#FF3B30")
@@ -53,7 +95,7 @@ enum Theme {
     )
 }
 
-// MARK: - Glass card modifier (login y otras vistas)
+// MARK: - Glass card modifier (LoginView)
 
 extension View {
     func glassCard() -> some View {
@@ -63,7 +105,7 @@ extension View {
     }
 }
 
-// MARK: - Status badge helper
+// MARK: - Status badge
 
 struct StatusBadge: View {
     let text: String

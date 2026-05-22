@@ -63,9 +63,9 @@ struct ClientesListView: View {
                     Button { showingAdd = true } label: {
                         Image(systemName: "plus")
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.navy)
                             .frame(width: 32, height: 32)
-                            .background(Theme.navy)
+                            .background(Theme.amber)
                             .clipShape(Circle())
                     }
                     .accessibilityLabel("Nuevo cliente")
