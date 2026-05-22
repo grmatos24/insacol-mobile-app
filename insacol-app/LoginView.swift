@@ -11,14 +11,11 @@ struct LoginView: View {
             VStack(spacing: 20) {
                 Spacer()
 
-                Image(systemName: "lock.shield")
+                Image("Logo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .foregroundStyle(.tint)
-
-                Text("Insacol")
-                    .font(.largeTitle.bold())
+                    .frame(maxWidth: 260, maxHeight: 140)
+                    .padding(.horizontal)
 
                 Text("Iniciar sesión")
                     .font(.headline)

@@ -82,7 +82,7 @@ struct GastosListView: View {
                 Task { await vm.load() }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingAdd = true
                     } label: {
@@ -163,6 +163,18 @@ private struct GastoRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                }
+                if gasto.esFondosPersonales == true {
+                    Label("Fondos personales · \(gasto.acreedorNombre ?? "—")",
+                          systemImage: "person.crop.circle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                } else if let cb = gasto.cuentaBancariaNombre, !cb.isEmpty {
+                    Label(cb, systemImage: "building.columns")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
                 }
             }
             Spacer()

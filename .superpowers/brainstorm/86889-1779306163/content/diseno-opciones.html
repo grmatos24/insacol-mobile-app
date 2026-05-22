@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opciones de diseño — Insacol iOS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+    background: #0a0a0f;
+    color: #f0f0f5;
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: #FFC107;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 36px;
+  }
+  .palette-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 4px 12px 4px 6px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 28px;
+  }
+  .swatch { width: 14px; height: 14px; border-radius: 50%; }
+
+  .options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 28px;
+  }
+
+  .option-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .option-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+  .option-card.recommended {
+    border-color: rgba(255,193,7,0.5);
+    box-shadow: 0 0 24px rgba(255,193,7,0.12);
+  }
+
+  .card-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-rec { background: rgba(255,193,7,0.2); color: #FFC107; }
+  .badge-min { background: rgba(100,200,100,0.15); color: #6fcf97; }
+  .badge-prem { background: rgba(150,100,255,0.2); color: #bb86fc; }
+
+  .option-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .option-desc {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.4;
+  }
+
+  /* Phone frames container */
+  .screens {
+    display: flex;
+    gap: 12px;
+    padding: 20px;
+    justify-content: center;
+    background: rgba(0,0,0,0.3);
+    flex-wrap: wrap;
+  }
+  .screen-label {
+    text-align: center;
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    margin-top: 6px;
+    letter-spacing: 0.3px;
+  }
+
+  /* iOS phone frame */
+  .phone {
+    width: 148px;
+    height: 290px;
+    background: #1c1c1e;
+    border-radius: 26px;
+    border: 2px solid rgba(255,255,255,0.15);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+  .notch {
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 60px; height: 18px;
+    background: #1c1c1e;
+    border-radius: 0 0 12px 12px;
+    z-index: 10;
+  }
+  .status-bar {
+    height: 22px;
+    padding: 4px 12px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 8px;
+    font-weight: 600;
+  }
+
+  /* Tab bar */
+  .tab-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 4px 8px;
+  }
+  .tab-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+  }
+  .tab-icon { font-size: 16px; line-height: 1; }
+  .tab-text { font-size: 7px; }
+
+  .screen-content {
+    position: absolute;
+    top: 22px;
+    left: 0; right: 0;
+    bottom: 52px;
+    overflow: hidden;
+  }
+
+  /* ===================== OPTION A ===================== */
+  /* Amber Accent Only — iOS Light */
+  .optA-phone { background: #f2f2f7; }
+  .optA-phone .status-bar { color: #1c1c1e; }
+  .optA-phone .tab-bar {
+    background: rgba(242,242,247,0.9);
+    backdrop-filter: blur(20px);
+    border-top: 0.5px solid rgba(0,0,0,0.1);
+  }
+  .optA-phone .tab-item.active .tab-icon { filter: none; }
+  .optA-phone .tab-item.active { color: #FFC107; }
+  .optA-phone .tab-item:not(.active) { color: #8e8e93; }
+
+  .optA-nav {
+    background: rgba(242,242,247,0.9);
+    backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(0,0,0,0.1);
+    padding: 6px 12px 6px;
+  }
+  .optA-nav-title { font-size: 13px; font-weight: 700; color: #1c1c1e; }
+  .optA-list-item {
+    background: #fff;
+    margin: 4px 8px;
+    border-radius: 10px;
+    padding: 7px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .optA-item-title { font-size: 9px; font-weight: 600; color: #1c1c1e; }
+  .optA-item-sub { font-size: 7px; color: #8e8e93; }
+  .badge-amber { background: rgba(255,193,7,0.15); color: #b8860b; font-size: 7px; padding: 2px 5px; border-radius: 6px; font-weight: 600; }
+  .badge-green { background: rgba(52,199,89,0.15); color: #248a3d; font-size: 7px; padding: 2px 5px; border-radius: 6px; font-weight: 600; }
+  .optA-btn {
+    background: #FFC107;
+    color: #1c1c1e;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    text-align: center;
+    margin: 6px 8px;
+  }
+
+  /* Login A */
+  .optA-login {
+    background: #f2f2f7;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 10px 10px;
+  }
+  .logo-rect {
+    width: 70px; height: 30px;
+    background: #FFC107;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 800;
+    color: #1c1c1e;
+    letter-spacing: 1px;
+  }
+  .optA-field {
+    width: 100%;
+    background: rgba(0,0,0,0.05);
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 8px;
+    color: #8e8e93;
+    margin-bottom: 5px;
+  }
+  .optA-login-btn {
+    width: 100%;
+    background: #FFC107;
+    color: #1c1c1e;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 7px;
+    border-radius: 10px;
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* ===================== OPTION B ===================== */
+  /* Liquid Glass + Amber — Adaptive */
+  .optB-phone { background: #1c1c1e; }
+  .optB-phone .status-bar { color: rgba(255,255,255,0.85); }
+  .optB-phone .tab-bar {
+    background: rgba(28,28,30,0.6);
+    backdrop-filter: blur(30px) saturate(180%);
+    border-top: 0.5px solid rgba(255,255,255,0.12);
+  }
+  .optB-phone .tab-item.active { color: #FFC107; }
+  .optB-phone .tab-item:not(.active) { color: rgba(255,255,255,0.4); }
+
+  .glass-nav {
+    background: rgba(28,28,30,0.7);
+    backdrop-filter: blur(30px) saturate(180%);
+    border-bottom: 0.5px solid rgba(255,255,255,0.1);
+    padding: 6px 12px;
+  }
+  .glass-nav-title { font-size: 13px; font-weight: 700; color: #fff; }
+
+  .glass-card {
+    background: rgba(255,255,255,0.07);
+    backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(255,255,255,0.12);
+    margin: 4px 8px;
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  .glass-card-title { font-size: 9px; font-weight: 600; color: #fff; }
+  .glass-card-sub { font-size: 7px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .glass-card-amount { font-size: 11px; font-weight: 700; color: #FFC107; margin-top: 3px; }
+  .glass-badge-pending { background: rgba(255,193,7,0.2); color: #FFC107; font-size: 7px; padding: 2px 5px; border-radius: 6px; font-weight: 600; }
+  .glass-badge-paid { background: rgba(52,199,89,0.2); color: #32d74b; font-size: 7px; padding: 2px 5px; border-radius: 6px; font-weight: 600; }
+  .glass-badge-issued { background: rgba(10,132,255,0.2); color: #0a84ff; font-size: 7px; padding: 2px 5px; border-radius: 6px; font-weight: 600; }
+
+  /* Login B */
+  .optB-login {
+    background: linear-gradient(160deg, #0F172A 0%, #1a2035 50%, #0F172A 100%);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 10px 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .optB-login::before {
+    content: '';
+    position: absolute;
+    top: -40px; left: -40px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(255,193,7,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .optB-logo {
+    width: 70px; height: 30px;
+    background: linear-gradient(135deg, #FFC107, #F59E0B);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 800;
+    color: #0F172A;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 16px rgba(255,193,7,0.4);
+    position: relative;
+    z-index: 1;
+  }
+  .optB-title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 10px; z-index: 1; position: relative; }
+  .glass-field {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 6px 8px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 5px;
+    position: relative;
+    z-index: 1;
+  }
+  .optB-login-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #FFC107, #F59E0B);
+    color: #0F172A;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 7px;
+    border-radius: 12px;
+    text-align: center;
+    margin-top: 4px;
+    box-shadow: 0 4px 14px rgba(255,193,7,0.35);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ===================== OPTION C ===================== */
+  /* Dark Navy + Liquid Glass Floating Cards */
+  .optC-phone { background: #0F172A; }
+  .optC-phone .status-bar { color: rgba(255,255,255,0.8); }
+  .optC-phone .tab-bar {
+    background: rgba(15,23,42,0.75);
+    backdrop-filter: blur(40px) saturate(200%);
+    border-top: 0.5px solid rgba(255,193,7,0.2);
+  }
+  .optC-phone .tab-item.active { color: #FFC107; }
+  .optC-phone .tab-item:not(.active) { color: rgba(255,255,255,0.3); }
+
+  .optC-header {
+    background: linear-gradient(180deg, rgba(15,23,42,1) 0%, rgba(15,23,42,0.9) 100%);
+    border-bottom: 0.5px solid rgba(255,193,7,0.2);
+    padding: 4px 12px 6px;
+  }
+  .optC-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .optC-title { font-size: 13px; font-weight: 800; color: #fff; }
+  .optC-add-btn {
+    width: 18px; height: 18px;
+    background: #FFC107;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0F172A;
+    line-height: 1;
+  }
+  .optC-filter {
+    display: flex;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .optC-chip {
+    font-size: 7px;
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+  .optC-chip.active {
+    background: #FFC107;
+    color: #0F172A;
+  }
+  .optC-chip:not(.active) {
+    background: rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.5);
+    border: 0.5px solid rgba(255,255,255,0.1);
+  }
+
+  .float-card {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px) saturate(150%);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    margin: 5px 8px;
+    border-radius: 14px;
+    padding: 8px 10px;
+    border-left: 2px solid #FFC107;
+  }
+  .float-card.paid { border-left-color: #32d74b; }
+  .float-card.pending { border-left-color: #FFC107; }
+  .float-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .float-card-title { font-size: 9px; font-weight: 700; color: #fff; }
+  .float-card-serie { font-size: 7px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .float-card-amount { font-size: 12px; font-weight: 800; color: #FFC107; margin-top: 3px; }
+  .float-card-amount.paid-amount { color: #32d74b; }
+  .chip-sm { font-size: 6px; padding: 2px 5px; border-radius: 6px; font-weight: 700; }
+  .chip-amber { background: rgba(255,193,7,0.15); color: #FFC107; }
+  .chip-green { background: rgba(50,215,75,0.15); color: #32d74b; }
+  .chip-blue { background: rgba(10,132,255,0.15); color: #0a84ff; }
+
+  /* Login C */
+  .optC-login {
+    background: linear-gradient(160deg, #0F172A 0%, #162032 60%, #0a1020 100%);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 10px 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .optC-login::before {
+    content: '';
+    position: absolute;
+    top: -20px; right: -30px;
+    width: 100px; height: 100px;
+    background: radial-gradient(circle, rgba(255,193,7,0.1) 0%, transparent 70%);
+  }
+  .optC-login::after {
+    content: '';
+    position: absolute;
+    bottom: 20px; left: -20px;
+    width: 80px; height: 80px;
+    background: radial-gradient(circle, rgba(255,193,7,0.06) 0%, transparent 70%);
+  }
+  .optC-logo-wrap {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 12px;
+  }
+  .optC-logo-glow {
+    position: absolute;
+    inset: -8px;
+    background: radial-gradient(circle, rgba(255,193,7,0.2) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .optC-logo {
+    position: relative;
+    width: 72px; height: 32px;
+    background: rgba(255,193,7,0.12);
+    border: 1px solid rgba(255,193,7,0.4);
+    border-radius: 10px;
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 800;
+    color: #FFC107;
+    letter-spacing: 1px;
+  }
+  .optC-title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 12px; z-index: 1; position: relative; }
+  .glass-field-dark {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 6px 8px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 5px;
+    position: relative;
+    z-index: 1;
+  }
+  .optC-login-btn {
+    width: 100%;
+    background: rgba(255,193,7,0.12);
+    border: 1px solid rgba(255,193,7,0.5);
+    color: #FFC107;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 7px;
+    border-radius: 12px;
+    text-align: center;
+    margin-top: 6px;
+    backdrop-filter: blur(20px);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Info panel */
+  .info-panel {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 7px;
+  }
+  .info-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .info-text { font-size: 11px; color: rgba(255,255,255,0.65); line-height: 1.4; }
+  .info-bold { font-weight: 600; color: rgba(255,255,255,0.9); }
+  .effort-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-top: 8px;
+    font-weight: 600;
+  }
+  .effort-a { background: rgba(100,200,100,0.1); color: #6fcf97; border: 0.5px solid rgba(100,200,100,0.3); }
+  .effort-b { background: rgba(255,193,7,0.1); color: #FFC107; border: 0.5px solid rgba(255,193,7,0.3); }
+  .effort-c { background: rgba(150,100,255,0.1); color: #bb86fc; border: 0.5px solid rgba(150,100,255,0.3); }
+</style>
+</head>
+<body>
+
+<h1>Diseño iOS — Insacol</h1>
+<p class="subtitle">Nuevas opciones: Liquid Glass nativo + paleta amarilla de la marca</p>
+
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:28px;">
+  <div class="palette-pill"><div class="swatch" style="background:#FFC107"></div>#FFC107 Amber (primario)</div>
+  <div class="palette-pill"><div class="swatch" style="background:#F59E0B"></div>#F59E0B Amber oscuro</div>
+  <div class="palette-pill"><div class="swatch" style="background:#0F172A"></div>#0F172A Slate 900</div>
+  <div class="palette-pill"><div class="swatch" style="background:#1c1c1e"></div>#1C1C1E iOS Dark</div>
+</div>
+
+<div class="options-grid">
+
+  <!-- OPCIÓN A -->
+  <div class="option-card">
+    <div class="card-header">
+      <div class="badge badge-min">Mínimo esfuerzo</div>
+      <div class="option-title">A — Amber Accent</div>
+      <div class="option-desc">Solo cambiar el AccentColor en Assets.xcassets a #FFC107. El Liquid Glass del tab bar y la navegación heredan el acento automáticamente. Zero re-diseño.</div>
+    </div>
+    <div class="screens">
+      <!-- Login A -->
+      <div>
+        <div class="phone optA-phone">
+          <div class="notch"></div>
+          <div class="status-bar">9:41 <span>●●●</span></div>
+          <div class="screen-content">
+            <div class="optA-login">
+              <div style="flex:1"></div>
+              <div class="logo-rect">INSACOL</div>
+              <div style="font-size:10px;color:#8e8e93;margin-bottom:12px;">Iniciar sesión</div>
+              <div class="optA-field">Correo</div>
+              <div class="optA-field">Contraseña</div>
+              <div class="optA-login-btn">Ingresar</div>
+              <div style="flex:2"></div>
+            </div>
+          </div>
+          <div class="tab-bar optA-phone-tab">
+            <div class="tab-item active"><div class="tab-icon">🔧</div><div class="tab-text" style="color:#FFC107">Mant.</div></div>
+            <div class="tab-item"><div class="tab-icon" style="opacity:0.4">📄</div><div class="tab-text" style="color:#8e8e93">Comerc.</div></div>
+            <div class="tab-item"><div class="tab-icon" style="opacity:0.4">💳</div><div class="tab-text" style="color:#8e8e93">Gastos</div></div>
+            <div class="tab-item"><div class="tab-icon" style="opacity:0.4">📚</div><div class="tab-text" style="color:#8e8e93">Catálog.</div></div>
+            <div class="tab-item"><div class="tab-icon" style="opacity:0.4">⚙️</div><div class="tab-text" style="color:#8e8e93">Ajustes</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Login</div>
+      </div>
+      <!-- List A -->
+      <div>
+        <div class="phone optA-phone">
+          <div class="notch"></div>
+          <div class="status-bar">9:41 <span>●●●</span></div>
+          <div class="screen-content">
+            <div class="optA-nav">
+              <div class="optA-nav-title">Facturas</div>
+            </div>
+            <div class="optA-list-item">
+              <div><div class="optA-item-title">Empresa ABC</div><div class="optA-item-sub">F-2026-001 · 15 may</div></div>
+              <div style="text-align:right"><div style="font-size:10px;font-weight:700;color:#FFC107">$1,250</div><div class="badge-amber">PEND.</div></div>
+            </div>
+            <div class="optA-list-item">
+              <div><div class="optA-item-title">Corp. XYZ</div><div class="optA-item-sub">F-2026-002 · 14 may</div></div>
+              <div style="text-align:right"><div style="font-size:10px;font-weight:700;color:#1c1c1e">$850</div><div class="badge-green">PAGADA</div></div>
+            </div>
+            <div class="optA-list-item">
+              <div><div class="optA-item-title">Industrias SA</div><div class="optA-item-sub">F-2026-003 · 13 may</div></div>
+              <div style="text-align:right"><div style="font-size:10px;font-weight:700;color:#FFC107">$3,400</div><div class="badge-amber">PEND.</div></div>
+            </div>
+          </div>
+          <div class="tab-bar" style="background:rgba(242,242,247,0.9);backdrop-filter:blur(20px);border-top:0.5px solid rgba(0,0,0,0.1);">
+            <div class="tab-item" style="color:#8e8e93"><div class="tab-icon" style="opacity:0.4">🔧</div><div class="tab-text">Mant.</div></div>
+            <div class="tab-item active" style="color:#FFC107"><div class="tab-icon">📄</div><div class="tab-text">Comerc.</div></div>
+            <div class="tab-item" style="color:#8e8e93"><div class="tab-icon" style="opacity:0.4">💳</div><div class="tab-text">Gastos</div></div>
+            <div class="tab-item" style="color:#8e8e93"><div class="tab-icon" style="opacity:0.4">📚</div><div class="tab-text">Catálog.</div></div>
+            <div class="tab-item" style="color:#8e8e93"><div class="tab-icon" style="opacity:0.4">⚙️</div><div class="tab-text">Ajustes</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Lista facturas</div>
+      </div>
+    </div>
+    <div class="info-panel">
+      <div class="info-row"><div class="info-dot" style="background:#6fcf97"></div><div class="info-text"><span class="info-bold">1 cambio</span>: AccentColor en Assets.xcassets</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#6fcf97"></div><div class="info-text">Tab bar Liquid Glass de iOS 26 hereda el amarillo automáticamente</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#6fcf97"></div><div class="info-text">Soporta light/dark mode sin código extra</div></div>
+      <div class="effort-tag effort-a">~5 min · 1 archivo</div>
+    </div>
+  </div>
+
+  <!-- OPCIÓN B -->
+  <div class="option-card recommended">
+    <div class="card-header">
+      <div class="badge badge-rec">⭐ Recomendada</div>
+      <div class="option-title">B — Glass + Amber</div>
+      <div class="option-desc">Login oscuro estilo marca + glass cards en listas + acento amarillo. Mantiene componentes nativos de iOS. Impacto visual alto con cambios quirúrgicos.</div>
+    </div>
+    <div class="screens">
+      <!-- Login B -->
+      <div>
+        <div class="phone optB-phone">
+          <div class="notch"></div>
+          <div class="status-bar">9:41 <span>●●●</span></div>
+          <div class="screen-content">
+            <div class="optB-login">
+              <div style="flex:1;position:relative;z-index:1"></div>
+              <div class="optB-logo">INSACOL</div>
+              <div class="optB-title">Iniciar sesión</div>
+              <div class="glass-field">✉ Correo</div>
+              <div class="glass-field">🔒 Contraseña</div>
+              <div class="optB-login-btn">Ingresar</div>
+              <div style="flex:2;position:relative;z-index:1"></div>
+            </div>
+          </div>
+          <div class="tab-bar" style="background:rgba(28,28,30,0.6);backdrop-filter:blur(30px);border-top:0.5px solid rgba(255,255,255,0.12);">
+            <div class="tab-item active" style="color:#FFC107"><div class="tab-icon">🔧</div><div class="tab-text">Mant.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">📄</div><div class="tab-text">Comerc.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">💳</div><div class="tab-text">Gastos</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">📚</div><div class="tab-text">Catálog.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">⚙️</div><div class="tab-text">Ajustes</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Login oscuro</div>
+      </div>
+      <!-- Facturas B -->
+      <div>
+        <div class="phone optB-phone">
+          <div class="notch"></div>
+          <div class="status-bar">9:41 <span style="color:rgba(255,255,255,0.7)">●●●</span></div>
+          <div class="screen-content">
+            <div class="glass-nav">
+              <div class="glass-nav-title">Facturas</div>
+            </div>
+            <div class="glass-card" style="margin-top:6px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div class="glass-card-title">Empresa ABC</div>
+                  <div class="glass-card-sub">F-2026-001 · 15 may</div>
+                </div>
+                <div class="glass-badge-pending">PEND.</div>
+              </div>
+              <div class="glass-card-amount">$1,250.00</div>
+            </div>
+            <div class="glass-card">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div class="glass-card-title">Corp. XYZ</div>
+                  <div class="glass-card-sub">F-2026-002 · 14 may</div>
+                </div>
+                <div class="glass-badge-paid">PAGADA</div>
+              </div>
+              <div class="glass-card-amount" style="color:#32d74b">$850.00</div>
+            </div>
+            <div class="glass-card">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div class="glass-card-title">Industrias SA</div>
+                  <div class="glass-card-sub">F-2026-003 · 13 may</div>
+                </div>
+                <div class="glass-badge-issued">EMITIDA</div>
+              </div>
+              <div class="glass-card-amount">$3,400.00</div>
+            </div>
+          </div>
+          <div class="tab-bar" style="background:rgba(28,28,30,0.6);backdrop-filter:blur(30px);border-top:0.5px solid rgba(255,255,255,0.12);">
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">🔧</div><div class="tab-text">Mant.</div></div>
+            <div class="tab-item active" style="color:#FFC107"><div class="tab-icon">📄</div><div class="tab-text">Comerc.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">💳</div><div class="tab-text">Gastos</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">📚</div><div class="tab-text">Catálog.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.35)"><div class="tab-icon" style="opacity:0.4">⚙️</div><div class="tab-text">Ajustes</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Lista facturas</div>
+      </div>
+    </div>
+    <div class="info-panel">
+      <div class="info-row"><div class="info-dot" style="background:#FFC107"></div><div class="info-text"><span class="info-bold">AccentColor → #FFC107</span> en Assets</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#FFC107"></div><div class="info-text"><span class="info-bold">LoginView</span>: fondo #0F172A + campos glass + botón amber gradiente</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#FFC107"></div><div class="info-text"><span class="info-bold">Listas</span>: filas como glass cards con <code>.ultraThinMaterial</code></div></div>
+      <div class="info-row"><div class="info-dot" style="background:#FFC107"></div><div class="info-text"><span class="info-bold">Badges</span>: amber=pendiente, verde=pagado, azul=emitido</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#FFC107"></div><div class="info-text"><span class="info-bold">Montos</span>: fuente grande, color amber</div></div>
+      <div class="effort-tag effort-b">~3-4 h · 6-8 archivos</div>
+    </div>
+  </div>
+
+  <!-- OPCIÓN C -->
+  <div class="option-card">
+    <div class="card-header">
+      <div class="badge badge-prem">Premium</div>
+      <div class="option-title">C — Navy + Floating Glass</div>
+      <div class="option-desc">Login con glow amber, listas con tarjetas flotantes glass sobre navy, borde izquierdo de color por estado. Segmento de filtros como chips. Máxima identidad de marca.</div>
+    </div>
+    <div class="screens">
+      <!-- Login C -->
+      <div>
+        <div class="phone optC-phone">
+          <div class="notch"></div>
+          <div class="status-bar">9:41 <span style="color:rgba(255,255,255,0.6)">●●●</span></div>
+          <div class="screen-content">
+            <div class="optC-login">
+              <div style="flex:1"></div>
+              <div class="optC-logo-wrap">
+                <div class="optC-logo-glow"></div>
+                <div class="optC-logo">INSACOL</div>
+              </div>
+              <div class="optC-title">Iniciar sesión</div>
+              <div class="glass-field-dark">✉ Correo</div>
+              <div class="glass-field-dark">🔒 Contraseña</div>
+              <div class="optC-login-btn">Ingresar</div>
+              <div style="flex:2"></div>
+            </div>
+          </div>
+          <div class="tab-bar" style="background:rgba(15,23,42,0.75);backdrop-filter:blur(40px);border-top:0.5px solid rgba(255,193,7,0.2);">
+            <div class="tab-item active" style="color:#FFC107"><div class="tab-icon">🔧</div><div class="tab-text">Mant.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">📄</div><div class="tab-text">Comerc.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">💳</div><div class="tab-text">Gastos</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">📚</div><div class="tab-text">Catálog.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">⚙️</div><div class="tab-text">Ajustes</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Login navy</div>
+      </div>
+      <!-- Facturas C -->
+      <div>
+        <div class="phone optC-phone">
+          <div class="notch"></div>
+          <div class="status-bar">9:41 <span style="color:rgba(255,255,255,0.6)">●●●</span></div>
+          <div class="screen-content">
+            <div class="optC-header">
+              <div class="optC-header-row">
+                <div class="optC-title">Facturas</div>
+                <div class="optC-add-btn">+</div>
+              </div>
+              <div class="optC-filter">
+                <div class="optC-chip active">Todas</div>
+                <div class="optC-chip">Pendientes</div>
+                <div class="optC-chip">Pagadas</div>
+              </div>
+            </div>
+            <div style="height:4px"></div>
+            <div class="float-card pending">
+              <div class="float-card-header">
+                <div>
+                  <div class="float-card-title">Empresa ABC</div>
+                  <div class="float-card-serie">F-2026-001 · 15 may</div>
+                </div>
+                <div class="chip-sm chip-amber">PEND.</div>
+              </div>
+              <div class="float-card-amount">$1,250.00</div>
+            </div>
+            <div class="float-card paid">
+              <div class="float-card-header">
+                <div>
+                  <div class="float-card-title">Corp. XYZ</div>
+                  <div class="float-card-serie">F-2026-002 · 14 may</div>
+                </div>
+                <div class="chip-sm chip-green">PAGADA</div>
+              </div>
+              <div class="float-card-amount paid-amount">$850.00</div>
+            </div>
+            <div class="float-card" style="border-left-color:#0a84ff">
+              <div class="float-card-header">
+                <div>
+                  <div class="float-card-title">Industrias SA</div>
+                  <div class="float-card-serie">F-2026-003 · 13 may</div>
+                </div>
+                <div class="chip-sm chip-blue">EMITIDA</div>
+              </div>
+              <div class="float-card-amount">$3,400.00</div>
+            </div>
+          </div>
+          <div class="tab-bar" style="background:rgba(15,23,42,0.75);backdrop-filter:blur(40px);border-top:0.5px solid rgba(255,193,7,0.2);">
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">🔧</div><div class="tab-text">Mant.</div></div>
+            <div class="tab-item active" style="color:#FFC107"><div class="tab-icon">📄</div><div class="tab-text">Comerc.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">💳</div><div class="tab-text">Gastos</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">📚</div><div class="tab-text">Catálog.</div></div>
+            <div class="tab-item" style="color:rgba(255,255,255,0.3)"><div class="tab-icon" style="opacity:0.3">⚙️</div><div class="tab-text">Ajustes</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Lista facturas</div>
+      </div>
+    </div>
+    <div class="info-panel">
+      <div class="info-row"><div class="info-dot" style="background:#bb86fc"></div><div class="info-text"><span class="info-bold">AccentColor → #FFC107</span> en Assets</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#bb86fc"></div><div class="info-text"><span class="info-bold">LoginView</span>: navy #0F172A + glow radial amber + logo glass</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#bb86fc"></div><div class="info-text"><span class="info-bold">Listas</span>: tarjetas flotantes glass con borde izquierdo por estado</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#bb86fc"></div><div class="info-text"><span class="info-bold">Header</span>: título grande + chips de filtro inline (reemplaza Picker)</div></div>
+      <div class="info-row"><div class="info-dot" style="background:#bb86fc"></div><div class="info-text"><span class="info-bold">Fondo app</span>: navy en place de .systemBackground</div></div>
+      <div class="effort-tag effort-c">~1 día · 12-15 archivos</div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:32px; padding:16px 20px; background:rgba(255,193,7,0.06); border:0.5px solid rgba(255,193,7,0.2); border-radius:16px;">
+  <div style="font-size:12px; font-weight:600; color:#FFC107; margin-bottom:8px;">Nota sobre Liquid Glass (iOS 26)</div>
+  <div style="font-size:11px; color:rgba(255,255,255,0.55); line-height:1.6;">
+    Las opciones B y C usan <code>.ultraThinMaterial</code> / <code>.regularMaterial</code> de SwiftUI para el efecto glass nativo.<br>
+    El tab bar y la navigation bar en iOS 26 ya tienen Liquid Glass por defecto — solo necesitan el acento correcto.<br>
+    Las custom glass cards se logran con <code>.background(.ultraThinMaterial)</code> + <code>.clipShape(.rect(cornerRadius: 14))</code>.
+  </div>
+</div>
+
+</body>
+</html>

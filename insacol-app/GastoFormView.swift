@@ -115,6 +115,7 @@ final class GastoFormViewModel {
         guard categoriaId != nil else { return false }
         guard subtotalDecimal > 0 else { return false }
         if esFondosPersonales && acreedorId == nil { return false }
+        if !esFondosPersonales && cuentaBancariaId == nil { return false }
         if requiereNumeroFactura && numeroFactura.trimmingCharacters(in: .whitespaces).isEmpty { return false }
         return true
     }
@@ -128,7 +129,9 @@ final class GastoFormViewModel {
             async let cnts = APIClient.shared.listCuentasBancarias()
             async let provs = APIClient.shared.listProveedores()
             let (a, b, c, d) = try await (cats, accs, cnts, provs)
-            self.categorias = a
+            self.categorias = a.sorted {
+                $0.nombre.localizedCaseInsensitiveCompare($1.nombre) == .orderedAscending
+            }
             self.acreedores = b
             self.cuentas = c
             self.proveedores = d
@@ -538,12 +541,22 @@ struct GastoFormView: View {
                         Text(a.nombre ?? "—").tag(a.id)
                     }
                 }
+                if vm.acreedorId == nil {
+                    Text("Acreedor requerido.")
+                        .font(.caption)
+                        .foregroundStyle(Color.red)
+                }
             } else {
                 Picker("Cuenta bancaria", selection: $vm.cuentaBancariaId) {
-                    Text("Sin asignar").tag(Int64?.none)
+                    Text("Selecciona...").tag(Int64?.none)
                     ForEach(vm.cuentas) { c in
                         Text("\(c.nombreCuenta ?? "—") · \(c.banco ?? "")").tag(c.id)
                     }
+                }
+                if vm.cuentaBancariaId == nil {
+                    Text("Cuenta bancaria requerida.")
+                        .font(.caption)
+                        .foregroundStyle(Color.red)
                 }
             }
         }

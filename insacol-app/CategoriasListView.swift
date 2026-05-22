@@ -12,7 +12,10 @@ final class CategoriasViewModel {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            self.categorias = try await APIClient.shared.listCategorias()
+            let list = try await APIClient.shared.listCategorias()
+            self.categorias = list.sorted {
+                $0.nombre.localizedCaseInsensitiveCompare($1.nombre) == .orderedAscending
+            }
         } catch {
             self.errorMessage = error.localizedDescription
         }
@@ -86,7 +89,7 @@ struct CategoriasListView: View {
             }
             .navigationTitle("Categorías")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                 }
             }
@@ -169,7 +172,9 @@ struct CategoriaFormView: View {
                 }
             }
             .navigationTitle(existingId == nil ? "Nueva categoría" : "Editar categoría")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {

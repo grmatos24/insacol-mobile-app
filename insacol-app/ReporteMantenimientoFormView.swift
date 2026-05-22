@@ -7,6 +7,7 @@ import SwiftUI
 final class ReporteMantenimientoFormViewModel: Identifiable {
     let existingId: Int64?
     let isReadOnly: Bool
+    let isCloneFromPrevious: Bool
 
     // Header
     var clienteId: Int64?
@@ -18,9 +19,15 @@ final class ReporteMantenimientoFormViewModel: Identifiable {
     // Detalles (uso un wrapper Identifiable estable porque el detalle puede no tener id aún)
     var detalles: [DetalleItem] = []
 
+    // Filtros sobre la lista de extintores
+    var filterMarcaId: Int64?
+    var filterTipoId: Int64?
+    var filterCapacidadId: Int64?
+
     // UI state
     var showingClientePicker = false
     var showingExtintorPicker = false
+    var changingCatalogForLocalId: UUID?
     var isSubmitting = false
     var errorMessage: String?
     var savedSuccessfully = false
@@ -45,23 +52,83 @@ final class ReporteMantenimientoFormViewModel: Identifiable {
         var id: UUID { localId }
     }
 
-    init(existing: ReporteMantenimientoDto?) {
+    init(existing: ReporteMantenimientoDto?, cloneFrom: ReporteMantenimientoDto? = nil) {
+        // Modo clone: actúa como nuevo (existingId = nil) pero pre-llena desde cloneFrom.
+        let source = existing ?? cloneFrom
         self.existingId = existing?.id
+        self.isCloneFromPrevious = (existing == nil && cloneFrom != nil)
         self.isReadOnly = (existing?.estado == .facturado)
 
-        if let r = existing {
+        if let r = source {
             clienteId = r.clienteId
             clienteNombre = {
                 if let s = r.clienteSubEmpresa, !s.isEmpty { return s }
                 if let e = r.clienteEmpresa, !e.isEmpty { return e }
-                return "Cliente #\(r.clienteId.map(String.init) ?? "-")"
+                return "Cargando cliente..."
             }()
-            if let s = r.fechaServicio?.apiDate { fechaServicio = s }
-            if let s = r.fechaProximoServicio?.apiDate { fechaProximoServicio = s }
-            observacionesGenerales = r.observacionesGenerales ?? ""
-            detalles = (r.detalles ?? []).map { d in
-                DetalleItem(data: d, displayName: "Extintor")
+            if existing != nil {
+                if let s = r.fechaServicio?.apiDate { fechaServicio = s }
+                if let s = r.fechaProximoServicio?.apiDate { fechaProximoServicio = s }
             }
+            // Si es clone: hoy + 1 año (por defecto que ya tenemos)
+            observacionesGenerales = existing != nil ? (r.observacionesGenerales ?? "") : ""
+            detalles = (r.detalles ?? []).map { d in
+                var data = d
+                if existing == nil {
+                    // Clone "limpio": conservamos identidad y datos físicos del extintor,
+                    // pero reseteamos los trabajos realizados, observaciones y descartado.
+                    data.id = nil
+                    data.recargado = false
+                    data.cantidadAgenteUtilizado = 0
+                    data.pruebaHidrostatica = false
+                    data.cambioManguera = false
+                    data.correa = false
+                    data.manometro = false
+                    data.gancho = false
+                    data.pasador = false
+                    data.descartado = false
+                    data.observaciones = nil
+                }
+                return DetalleItem(data: data, displayName: "Extintor")
+            }
+            sortDetallesByCodigo()
+        }
+    }
+
+    /// Resuelve "Marca Tipo Capacidad" para cada detalle desde el catálogo.
+    func resolveDetalleNames() async {
+        await CatalogCache.shared.loadIfNeeded()
+        let cache = CatalogCache.shared
+        for i in detalles.indices {
+            let id = detalles[i].data.extintorCatalogoId
+            detalles[i].displayName = cache.displayName(for: id)
+        }
+    }
+
+    /// Cambia el catálogo (marca/tipo/capacidad) de un detalle ya agregado.
+    func changeCatalogo(localId: UUID, extintor: ExtintorDto, displayName: String) {
+        guard let i = detalles.firstIndex(where: { $0.localId == localId }) else { return }
+        detalles[i].data.extintorCatalogoId = extintor.id
+        detalles[i].displayName = displayName
+        // Aseguramos que la card siga expandida tras el cambio.
+        detalles[i].isExpanded = true
+        // Limpiamos cualquier filtro activo para garantizar que el usuario
+        // pueda ver el extintor que acaba de modificar.
+        clearFilters()
+    }
+
+    /// Cuando se edita un reporte, el backend solo da clienteId. Resolvemos el nombre.
+    func resolveClienteName() async {
+        guard let id = clienteId else { return }
+        // Si ya tenemos un nombre "real" (no "Cargando..."), no hacemos nada.
+        if !clienteNombre.isEmpty && clienteNombre != "Cargando cliente..." { return }
+        do {
+            let page = try await APIClient.shared.listClientes(size: 500)
+            if let c = page.content.first(where: { $0.id == id }) {
+                clienteNombre = c.displayName
+            }
+        } catch {
+            // Si falla, dejamos el placeholder; no es crítico
         }
     }
 
@@ -97,13 +164,41 @@ final class ReporteMantenimientoFormViewModel: Identifiable {
             descartado: false,
             observaciones: nil
         )
+        // Preferimos "Marca Tipo Capacidad" del catálogo; si no, usamos el nombre denormalizado del ExtintorCliente.
+        let displayName = CatalogCache.shared.displayName(for: e.extintorCatalogoId)
+        let finalName = displayName != "Extintor" ? displayName : (e.extintorNombre ?? "Extintor")
         detalles.append(
             DetalleItem(
                 data: dto,
-                displayName: e.extintorNombre ?? "Extintor",
+                displayName: finalName,
                 isExpanded: true
             )
         )
+        sortDetallesByCodigo()
+    }
+
+    func addBlankDetalle() {
+        let dto = ReporteMantenimientoDetalleDto(
+            id: nil,
+            extintorClienteId: nil,
+            extintorCatalogoId: nil,
+            numeroSerie: nil,
+            ubicacionHabitual: nil,
+            codigoInsacol: nil,
+            fechaPh: nil,
+            fechaProxPh: nil,
+            recargado: false,
+            cantidadAgenteUtilizado: 0,
+            pruebaHidrostatica: false,
+            cambioManguera: false,
+            correa: false,
+            manometro: false,
+            gancho: false,
+            pasador: false,
+            descartado: false,
+            observaciones: nil
+        )
+        detalles.append(DetalleItem(data: dto, displayName: "Nuevo extintor", isExpanded: true))
     }
 
     func removeDetalle(_ d: DetalleItem) {
@@ -138,12 +233,88 @@ final class ReporteMantenimientoFormViewModel: Identifiable {
         }
     }
 
+    /// Ordena los detalles por `codigoInsacol` (ascendente, locale-aware).
+    /// Los descartados (código "descartado") quedan al final.
+    func sortDetallesByCodigo() {
+        detalles.sort { a, b in
+            let ca = (a.data.codigoInsacol ?? "").trimmingCharacters(in: .whitespaces)
+            let cb = (b.data.codigoInsacol ?? "").trimmingCharacters(in: .whitespaces)
+            let aDescartado = ca.lowercased() == "descartado"
+            let bDescartado = cb.lowercased() == "descartado"
+            if aDescartado != bDescartado { return !aDescartado }
+            return ca.localizedStandardCompare(cb) == .orderedAscending
+        }
+    }
+
+    // MARK: - Filtros sobre la lista de extintores
+
+    var hasActiveFilter: Bool {
+        filterMarcaId != nil || filterTipoId != nil || filterCapacidadId != nil
+    }
+
+    func clearFilters() {
+        filterMarcaId = nil
+        filterTipoId = nil
+        filterCapacidadId = nil
+    }
+
+    /// Devuelve true si el detalle pasa los filtros activos.
+    func matchesFilter(_ item: DetalleItem) -> Bool {
+        guard hasActiveFilter else { return true }
+        guard let catId = item.data.extintorCatalogoId,
+              let ext = CatalogCache.shared.extintores.first(where: { $0.id == catId })
+        else {
+            // Si no encontramos el catálogo pero hay filtros activos, excluir.
+            return false
+        }
+        if let m = filterMarcaId, ext.marcaId != m { return false }
+        if let t = filterTipoId, ext.tipoId != t { return false }
+        if let c = filterCapacidadId, ext.capacidadId != c { return false }
+        return true
+    }
+
+    /// Opciones de filtro derivadas de los extintores presentes en el reporte (id → nombre).
+    var availableMarcas: [(Int64, String)] {
+        let cache = CatalogCache.shared
+        let ids = Set(detalles.compactMap { d -> Int64? in
+            cache.extintores.first { $0.id == d.data.extintorCatalogoId }?.marcaId
+        })
+        return ids.compactMap { id in
+            cache.marcas[id].map { (id, $0) }
+        }.sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+    }
+
+    var availableTipos: [(Int64, String)] {
+        let cache = CatalogCache.shared
+        let ids = Set(detalles.compactMap { d -> Int64? in
+            cache.extintores.first { $0.id == d.data.extintorCatalogoId }?.tipoId
+        })
+        return ids.compactMap { id in
+            cache.tipos[id].map { (id, $0) }
+        }.sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+    }
+
+    var availableCapacidades: [(Int64, String)] {
+        let cache = CatalogCache.shared
+        let ids = Set(detalles.compactMap { d -> Int64? in
+            cache.extintores.first { $0.id == d.data.extintorCatalogoId }?.capacidadId
+        })
+        return ids.compactMap { id in
+            cache.capacidades[id].map { (id, $0) }
+        }.sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+    }
+
+    var filteredCount: Int {
+        detalles.filter(matchesFilter).count
+    }
+
     // MARK: - Validation
 
     var isValid: Bool {
         guard clienteId != nil else { return false }
         guard !detalles.isEmpty else { return false }
         for d in detalles {
+            if d.data.extintorCatalogoId == nil { return false }
             let nSerie = (d.data.numeroSerie ?? "").trimmingCharacters(in: .whitespaces)
             let codigo = (d.data.codigoInsacol ?? "").trimmingCharacters(in: .whitespaces)
             if nSerie.isEmpty { return false }
@@ -203,8 +374,10 @@ struct ReporteMantenimientoFormView: View {
     @State var vm: ReporteMantenimientoFormViewModel
     let onClose: (Bool) -> Void
 
-    init(reporte: ReporteMantenimientoDto?, onClose: @escaping (Bool) -> Void) {
-        self._vm = State(initialValue: ReporteMantenimientoFormViewModel(existing: reporte))
+    init(reporte: ReporteMantenimientoDto?,
+         cloneFrom: ReporteMantenimientoDto? = nil,
+         onClose: @escaping (Bool) -> Void) {
+        self._vm = State(initialValue: ReporteMantenimientoFormViewModel(existing: reporte, cloneFrom: cloneFrom))
         self.onClose = onClose
     }
 
@@ -213,6 +386,7 @@ struct ReporteMantenimientoFormView: View {
             Form {
                 clienteSection
                 fechasSection
+                filtrosSection
                 extintoresSection
                 observacionesSection
                 if vm.existingId != nil {
@@ -226,7 +400,11 @@ struct ReporteMantenimientoFormView: View {
                 }
             }
             .disabled(vm.isReadOnly && vm.existingId != nil ? false : false) // permitir edición; solo bloquea al guardar si está facturado
-            .navigationTitle(vm.existingId == nil ? "Nuevo reporte" : (vm.isReadOnly ? "Reporte (facturado)" : "Editar reporte"))
+            .navigationTitle(
+                vm.existingId == nil
+                    ? (vm.isCloneFromPrevious ? "Iniciar mantenimiento" : "Nuevo reporte")
+                    : (vm.isReadOnly ? "Reporte (facturado)" : "Editar reporte")
+            )
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -249,6 +427,10 @@ struct ReporteMantenimientoFormView: View {
                     }
                 }
             }
+            .task {
+                await vm.resolveClienteName()
+                await vm.resolveDetalleNames()
+            }
             .sheet(isPresented: $vm.showingClientePicker) {
                 ClienteSelectorView { c in vm.setCliente(c) }
             }
@@ -264,10 +446,29 @@ struct ReporteMantenimientoFormView: View {
                 }
             }
             .sheet(item: Binding(
-                get: { vm.pdfDataToShare.map { PDFShareItem(data: $0, id: vm.existingId ?? 0) } },
+                get: { vm.changingCatalogForLocalId.map { ChangingCatalogContext(localId: $0) } },
+                set: { if $0 == nil { vm.changingCatalogForLocalId = nil } }
+            )) { ctx in
+                ExtintorCatalogoPickerView { ext, name in
+                    vm.changeCatalogo(localId: ctx.localId, extintor: ext, displayName: name)
+                }
+            }
+            .sheet(item: Binding(
+                get: {
+                    vm.pdfDataToShare.map {
+                        PDFShareItem(
+                            data: $0,
+                            id: vm.existingId ?? 0,
+                            suggestedName: reportePdfFilename(clienteName: vm.clienteNombre)
+                        )
+                    }
+                },
                 set: { if $0 == nil { vm.pdfDataToShare = nil } }
             )) { item in
-                PDFShareSheet(data: item.data, suggestedName: "reporte-\(item.id).pdf")
+                PDFShareSheet(
+                    data: item.data,
+                    suggestedName: item.suggestedName ?? "Reporte.pdf"
+                )
             }
             .onChange(of: vm.savedSuccessfully) { _, newValue in
                 if newValue {
@@ -324,6 +525,25 @@ struct ReporteMantenimientoFormView: View {
     }
 
     @ViewBuilder
+    private var filtrosSection: some View {
+        if vm.detalles.count >= 2 {
+            Section {
+                filtrosRow
+            } header: {
+                HStack {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                    Text("Filtrar extintores")
+                }
+            } footer: {
+                if vm.hasActiveFilter && vm.filteredCount == 0 {
+                    Text("Ningún extintor coincide con los filtros.")
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var extintoresSection: some View {
         Section {
             if vm.detalles.isEmpty {
@@ -331,14 +551,19 @@ struct ReporteMantenimientoFormView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach($vm.detalles, id: \.localId) { $item in
-                    ExtintorCard(
-                        item: $item,
-                        readOnly: vm.isReadOnly,
-                        onDelete: { vm.removeDetalle(item) },
-                        onToggleDescartado: { v in
-                            vm.toggleDescartado(localId: item.localId, descartado: v)
-                        }
-                    )
+                    if vm.matchesFilter(item) {
+                        ExtintorCard(
+                            item: $item,
+                            readOnly: vm.isReadOnly,
+                            onDelete: { vm.removeDetalle(item) },
+                            onToggleDescartado: { v in
+                                vm.toggleDescartado(localId: item.localId, descartado: v)
+                            },
+                            onChangeCatalog: {
+                                vm.changingCatalogForLocalId = item.localId
+                            }
+                        )
+                    }
                 }
             }
             if !vm.isReadOnly {
@@ -346,7 +571,7 @@ struct ReporteMantenimientoFormView: View {
                     if vm.clienteId == nil {
                         vm.errorMessage = "Selecciona un cliente primero."
                     } else {
-                        vm.showingExtintorPicker = true
+                        vm.addBlankDetalle()
                     }
                 } label: {
                     Label("Agregar extintor", systemImage: "plus.circle.fill")
@@ -356,10 +581,91 @@ struct ReporteMantenimientoFormView: View {
             HStack {
                 Text("Extintores")
                 Spacer()
-                Text("\(vm.detalles.count)")
-                    .foregroundStyle(.secondary)
+                if vm.hasActiveFilter {
+                    Text("\(vm.filteredCount) / \(vm.detalles.count)")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(vm.detalles.count)")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private var filtrosRow: some View {
+        // Solo mostramos los filtros si hay al menos algunos extintores para filtrar
+        if vm.detalles.count >= 2 {
+            HStack(spacing: 8) {
+                Menu {
+                    Button("Todas") { vm.filterMarcaId = nil }
+                    ForEach(vm.availableMarcas, id: \.0) { (id, name) in
+                        Button(name) { vm.filterMarcaId = id }
+                    }
+                } label: {
+                    filterLabel(
+                        title: "Marca",
+                        value: vm.filterMarcaId.flatMap { id in
+                            vm.availableMarcas.first { $0.0 == id }?.1
+                        }
+                    )
+                }
+
+                Menu {
+                    Button("Todos") { vm.filterTipoId = nil }
+                    ForEach(vm.availableTipos, id: \.0) { (id, name) in
+                        Button(name) { vm.filterTipoId = id }
+                    }
+                } label: {
+                    filterLabel(
+                        title: "Tipo",
+                        value: vm.filterTipoId.flatMap { id in
+                            vm.availableTipos.first { $0.0 == id }?.1
+                        }
+                    )
+                }
+
+                Menu {
+                    Button("Todas") { vm.filterCapacidadId = nil }
+                    ForEach(vm.availableCapacidades, id: \.0) { (id, name) in
+                        Button(name) { vm.filterCapacidadId = id }
+                    }
+                } label: {
+                    filterLabel(
+                        title: "Cap.",
+                        value: vm.filterCapacidadId.flatMap { id in
+                            vm.availableCapacidades.first { $0.0 == id }?.1
+                        }
+                    )
+                }
+
+                if vm.hasActiveFilter {
+                    Button(role: .destructive) {
+                        vm.clearFilters()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .font(.caption)
+        }
+    }
+
+    @ViewBuilder
+    private func filterLabel(title: String, value: String?) -> some View {
+        let isActive = value != nil
+        HStack(spacing: 4) {
+            Text(value ?? title)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.caption2)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(isActive ? Color.accentColor.opacity(0.18) : Color.gray.opacity(0.12))
+        .foregroundStyle(isActive ? Color.accentColor : .primary)
+        .clipShape(Capsule())
     }
 
     @ViewBuilder
@@ -378,6 +684,7 @@ private struct ExtintorCard: View {
     let readOnly: Bool
     let onDelete: () -> Void
     let onToggleDescartado: (Bool) -> Void
+    let onChangeCatalog: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -459,6 +766,16 @@ private struct ExtintorCard: View {
     @ViewBuilder
     private var expandedEditor: some View {
         Divider()
+        if !readOnly {
+            Button {
+                onChangeCatalog()
+            } label: {
+                Label("Cambiar tipo de extintor", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .font(.callout)
+            .padding(.vertical, 2)
+            .buttonStyle(.borderless)
+        }
         Group {
             row("Serie") {
                 TextField("Serie", text: Binding(
@@ -552,6 +869,7 @@ private struct ExtintorCard: View {
                 } label: {
                     Label("Quitar del reporte", systemImage: "trash")
                 }
+                .buttonStyle(.borderless)
             }
             .padding(.top, 4)
         }
@@ -580,6 +898,26 @@ private struct ExtintorCard: View {
 struct PDFShareItem: Identifiable {
     let data: Data
     let id: Int64
+    var suggestedName: String?
+}
+
+/// Construye un nombre de archivo válido a partir del nombre del cliente
+/// (preferentemente subEmpresa). Reemplaza espacios y caracteres no aptos
+/// para nombres de archivo.
+func reportePdfFilename(clienteName: String?) -> String {
+    let name = (clienteName ?? "").trimmingCharacters(in: .whitespaces)
+    guard !name.isEmpty else { return "Reporte.pdf" }
+    let disallowed = CharacterSet(charactersIn: "/\\:*?\"<>|")
+    let cleaned = name
+        .components(separatedBy: disallowed)
+        .joined()
+        .replacingOccurrences(of: " ", with: "_")
+    return "Reporte_\(cleaned).pdf"
+}
+
+private struct ChangingCatalogContext: Identifiable {
+    let localId: UUID
+    var id: UUID { localId }
 }
 
 #if os(iOS)

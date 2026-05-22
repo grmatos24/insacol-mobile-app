@@ -146,19 +146,21 @@ struct FacturasListView: View {
                     Task { await vm.anular(target) }
                 }
             } message: { _ in Text("Esta acción no se puede deshacer.") }
-            .alert("¿Emitir factura electrónica?",
+            .alert(toEmitirFe?.estadoFe == "ERROR" ? "¿Reintentar factura electrónica?" : "¿Emitir factura electrónica?",
                    isPresented: Binding(
                     get: { toEmitirFe != nil },
                     set: { if !$0 { toEmitirFe = nil } }
                    ),
                    presenting: toEmitirFe) { f in
                 Button("Cancelar", role: .cancel) { toEmitirFe = nil }
-                Button("Emitir") {
+                Button(f.estadoFe == "ERROR" ? "Reintentar" : "Emitir") {
                     let target = f; toEmitirFe = nil
                     Task { await vm.emitirFe(target) }
                 }
-            } message: { _ in
-                Text("Se enviará la factura a la DGI vía HKA. Asegúrate de que los datos estén correctos.")
+            } message: { f in
+                Text(f.estadoFe == "ERROR"
+                    ? "La emisión anterior falló. Se intentará enviar de nuevo a la DGI vía HKA."
+                    : "Se enviará la factura a la DGI vía HKA. Asegúrate de que los datos estén correctos.")
             }
             .alert("Error",
                    isPresented: Binding(
@@ -199,13 +201,14 @@ struct FacturasListView: View {
                                         }
                                     }
                                     .tint(.teal)
-                                } else if f.anulada != true {
+                                } else if f.estadoFe == "ERROR" || f.anulada != true {
                                     Button {
                                         toEmitirFe = f
                                     } label: {
-                                        Label("Emitir FE", systemImage: "bolt.fill")
+                                        Label(f.estadoFe == "ERROR" ? "Reintentar FE" : "Emitir FE",
+                                              systemImage: f.estadoFe == "ERROR" ? "arrow.clockwise.circle" : "bolt.fill")
                                     }
-                                    .tint(.orange)
+                                    .tint(f.estadoFe == "ERROR" ? .red : .orange)
                                 }
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {

@@ -1,0 +1,4 @@
+{"type":"server-started","port":60245,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:60245","screen_dir":"/Users/guillermomatos/workspace/Insacol/insacol-app/.superpowers/brainstorm/86889-1779306163/content","state_dir":"/Users/guillermomatos/workspace/Insacol/insacol-app/.superpowers/brainstorm/86889-1779306163/state"}
+{"type":"screen-added","file":"/Users/guillermomatos/workspace/Insacol/insacol-app/.superpowers/brainstorm/86889-1779306163/content/diseno-opciones.html"}
+{"type":"screen-updated","file":"/Users/guillermomatos/workspace/Insacol/insacol-app/.superpowers/brainstorm/86889-1779306163/content/diseno-opciones.html"}
+{"type":"server-stopped","reason":"idle timeout"}
