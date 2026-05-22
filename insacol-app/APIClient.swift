@@ -73,9 +73,9 @@ final class AuthManager {
 final class APIClient {
     static let shared = APIClient()
 
-    // Backend en Docker, accesible vía la IP LAN del Mac.
-    // (En simulador iOS, "localhost" no siempre apunta al Mac host, por eso usamos la IP de la red.)
-    var baseURL: URL = URL(string: "http://192.168.1.21:8080")!
+    var baseURL: URL = URL(string: "https://insacol-api-production.up.railway.app")!
+//    var baseURL: URL = URL(string: "http://192.168.1.21:8080")!
+
 
     private let session: URLSession
     private let encoder: JSONEncoder
