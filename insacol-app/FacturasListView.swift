@@ -77,9 +77,8 @@ struct FacturasListView: View {
     @State private var toAnular: FacturaDto?
     @State private var toEmitirFe: FacturaDto?
     @State private var descargandoPdfId: Int64?
-    @State private var descargandoXmlId: Int64?
+    @State private var descargandoFePdfId: Int64?
     @State private var pdfToShare: PDFShareItem?
-    @State private var xmlToShare: XMLShareItem?
     @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
@@ -135,9 +134,6 @@ struct FacturasListView: View {
             .sheet(item: $pdfToShare) { item in
                 PDFShareSheet(data: item.data, suggestedName: item.suggestedName ?? "Factura.pdf")
             }
-            .sheet(item: $xmlToShare) { item in
-                PDFShareSheet(data: item.data, suggestedName: item.suggestedName)
-            }
             .alert("¿Anular factura?",
                    isPresented: Binding(
                     get: { toAnular != nil },
@@ -192,33 +188,14 @@ struct FacturasListView: View {
                     ForEach(vm.facturas) { f in
                         FacturaRow(factura: f)
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    Task { await descargarPdf(f) }
-                                } label: {
-                                    if descargandoPdfId == f.id {
-                                        ProgressView()
-                                    } else {
-                                        Label("PDF", systemImage: "square.and.arrow.down")
-                                    }
-                                }
-                                .tint(.indigo)
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                if f.pagado != true && f.anulada != true {
-                                    Button(role: .destructive) {
-                                        toAnular = f
-                                    } label: {
-                                        Label("Anular", systemImage: "xmark.circle")
-                                    }
-                                }
                                 if f.estadoFe == "EMITIDA" {
                                     Button {
-                                        Task { await descargarXml(f) }
+                                        Task { await descargarFePdf(f) }
                                     } label: {
-                                        if descargandoXmlId == f.id {
+                                        if descargandoFePdfId == f.id {
                                             ProgressView()
                                         } else {
-                                            Label("XML", systemImage: "doc.badge.arrow.up")
+                                            Label("PDF FE", systemImage: "checkmark.seal")
                                         }
                                     }
                                     .tint(.teal)
@@ -230,6 +207,25 @@ struct FacturasListView: View {
                                     }
                                     .tint(.orange)
                                 }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if f.pagado != true && f.anulada != true {
+                                    Button(role: .destructive) {
+                                        toAnular = f
+                                    } label: {
+                                        Label("Anular", systemImage: "xmark.circle")
+                                    }
+                                }
+                                Button {
+                                    Task { await descargarPdf(f) }
+                                } label: {
+                                    if descargandoPdfId == f.id {
+                                        ProgressView()
+                                    } else {
+                                        Label("PDF", systemImage: "square.and.arrow.down")
+                                    }
+                                }
+                                .tint(.indigo)
                             }
                     }
                 }
@@ -255,29 +251,21 @@ struct FacturasListView: View {
         }
     }
 
-    private func descargarXml(_ f: FacturaDto) async {
+    private func descargarFePdf(_ f: FacturaDto) async {
         guard let id = f.id else { return }
-        descargandoXmlId = id
-        defer { descargandoXmlId = nil }
+        descargandoFePdfId = id
+        defer { descargandoFePdfId = nil }
         do {
-            let data = try await APIClient.shared.downloadFacturaXml(id: id)
-            xmlToShare = XMLShareItem(
-                id: id,
+            let data = try await APIClient.shared.downloadFacturaFePdf(id: id)
+            pdfToShare = PDFShareItem(
                 data: data,
-                suggestedName: "Factura_\(f.serie ?? String(id)).xml"
+                id: id,
+                suggestedName: "FacturaFE_\(f.serie ?? String(id)).pdf"
             )
         } catch {
             vm.errorMessage = error.localizedDescription
         }
     }
-}
-
-// MARK: - XML Share Item
-
-struct XMLShareItem: Identifiable {
-    let id: Int64
-    let data: Data
-    let suggestedName: String
 }
 
 // MARK: - Factura Row
