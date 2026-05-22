@@ -164,6 +164,10 @@ struct ClienteDto: Codable, Identifiable, Hashable {
     var distritoFe: String?
     var corregimientoFe: String?
     var direccionFe: String?
+    var rucValidadoHka: Bool?
+    var dvHka: String?
+    var razonSocialHka: String?
+    var afiliadoFeHka: String?
 
     var displayName: String {
         if let s = subEmpresa, !s.isEmpty { return s }

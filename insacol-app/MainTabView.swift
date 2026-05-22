@@ -1,22 +1,29 @@
 import SwiftUI
 
 struct MainTabView: View {
+    private var canSeeGastos: Bool {
+        let role = AuthManager.shared.role?.lowercased() ?? ""
+        return role == "developer" || role == "admin"
+    }
+
     var body: some View {
         TabView {
-            ReportesMantenimientoListView()
-                .tabItem {
-                    Label("Mantenimiento", systemImage: "wrench.and.screwdriver")
-                }
-
             ComercialView()
                 .tabItem {
                     Label("Comercial", systemImage: "doc.text")
                 }
 
-            GastosListView()
+            ReportesMantenimientoListView()
                 .tabItem {
-                    Label("Gastos", systemImage: "creditcard")
+                    Label("Mantenimiento", systemImage: "wrench.and.screwdriver")
                 }
+
+            if canSeeGastos {
+                GastosListView()
+                    .tabItem {
+                        Label("Gastos", systemImage: "creditcard")
+                    }
+            }
 
             CatalogosView()
                 .tabItem {

@@ -39,7 +39,7 @@ struct ClienteFormView: View {
         _celular = State(initialValue: cliente?.celular ?? "")
         _ruc = State(initialValue: cliente?.ruc ?? "")
         _dvText = State(initialValue: cliente?.dv.map(String.init) ?? "")
-        _tipoContribuyente = State(initialValue: cliente?.tipoContribuyente ?? "")
+        _tipoContribuyente = State(initialValue: cliente?.tipoContribuyente ?? "1")
         _retieneItbms = State(initialValue: cliente?.retieneItbms ?? false)
         _codigoUbicacion = State(initialValue: cliente?.codigoUbicacion ?? "")
         _provinciaFe = State(initialValue: cliente?.provinciaFe ?? "")
@@ -82,7 +82,10 @@ struct ClienteFormView: View {
                         .keyboardType(.numberPad)
                     TextField("DV *", text: $dvText)
                         .keyboardType(.numberPad)
-                    TextField("Tipo contribuyente", text: $tipoContribuyente)
+                    Picker("Tipo contribuyente", selection: $tipoContribuyente) {
+                        Text("Natural").tag("1")
+                        Text("Jurídica").tag("2")
+                    }
                     Toggle("Retiene ITBMS", isOn: $retieneItbms)
                     Picker("Tipo de RUC", selection: $tipoRucSeleccion) {
                         Text("Natural").tag("1")
@@ -156,7 +159,9 @@ struct ClienteFormView: View {
                 if subEmpresa.isEmpty { subEmpresa = razon }
             }
             if let d = proveedor.dv { dvText = d }
-            if let tipo = proveedor.tipoPersona { tipoContribuyente = tipo }
+            if let tipo = proveedor.tipoPersona {
+                tipoContribuyente = tipo == "J" ? "2" : "1"
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -177,7 +182,7 @@ struct ClienteFormView: View {
             celular: celular.isEmpty ? nil : celular,
             ruc: ruc.trimmingCharacters(in: .whitespaces),
             dv: Int(dvText.trimmingCharacters(in: .whitespaces)),
-            tipoContribuyente: tipoContribuyente.isEmpty ? nil : tipoContribuyente,
+            tipoContribuyente: tipoContribuyente,
             retieneItbms: retieneItbms,
             codigoUbicacion: codigoUbicacion.isEmpty ? nil : codigoUbicacion,
             provinciaFe: provinciaFe.isEmpty ? nil : provinciaFe,

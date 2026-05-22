@@ -69,6 +69,7 @@ struct ClientesListView: View {
                             ClienteRow(cliente: c)
                                 .contentShape(Rectangle())
                                 .onTapGesture { editing = c }
+                                .listRowSeparator(.visible)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
                                         toDelete = c
@@ -133,6 +134,10 @@ struct ClientesListView: View {
 private struct ClienteRow: View {
     let cliente: ClienteDto
 
+    private var verificadoDgi: Bool {
+        cliente.rucValidadoHka == true
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(cliente.displayName).font(.headline).lineLimit(1)
@@ -147,6 +152,14 @@ private struct ClienteRow: View {
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Color.blue.opacity(0.15))
                         .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                }
+                if verificadoDgi {
+                    Label("DGI", systemImage: "checkmark.seal.fill")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.green.opacity(0.15))
+                        .foregroundStyle(.green)
                         .clipShape(Capsule())
                 }
             }
