@@ -188,8 +188,10 @@ struct FacturasListView: View {
             } else {
                 List {
                     ForEach(vm.facturas) { f in
-                        FacturaRow(factura: f)
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        NavigationLink(value: f) {
+                            FacturaRow(factura: f)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if f.estadoFe == "EMITIDA" {
                                     Button {
                                         Task { await descargarFePdf(f) }
@@ -231,6 +233,9 @@ struct FacturasListView: View {
                                 .tint(.indigo)
                             }
                     }
+                }
+                .navigationDestination(for: FacturaDto.self) { f in
+                    FacturaDetailView(factura: f)
                 }
                 .listStyle(.plain)
                 .refreshable { await vm.load() }
@@ -404,6 +409,217 @@ private struct FacturasFiltersSheet: View {
                 if let f = fechaInicio { localInicio = f }
                 if let f = fechaFin { localFin = f }
             }
+        }
+    }
+}
+
+// MARK: - Factura Detail View
+
+struct FacturaDetailView: View {
+    let facturaId: Int64
+    @State private var factura: FacturaDto
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var pdfToShare: PDFShareItem?
+    @State private var descargandoPdf = false
+    @State private var descargandoFePdf = false
+
+    init(factura: FacturaDto) {
+        self.facturaId = factura.id ?? 0
+        self._factura = State(initialValue: factura)
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(factura.clienteDisplayName)
+                        .font(.title3.bold())
+                    HStack(spacing: 10) {
+                        if let s = factura.serie, !s.isEmpty {
+                            Text(s).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let f = factura.fecha?.apiDate {
+                            Label(f.displayString, systemImage: "calendar")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    HStack(spacing: 6) { pagoBadge; feBadge }
+                }
+                .padding(.vertical, 4)
+
+                if let ndf = factura.numeroDocumentoFiscal, !ndf.isEmpty {
+                    LabeledContent("N° Fiscal", value: ndf)
+                }
+            }
+
+            Section("Detalle") {
+                if let fp = factura.formaPago {
+                    LabeledContent("Forma de pago",
+                        value: MetodoPago(rawValue: fp)?.label ?? fp)
+                }
+                if let obs = factura.observaciones, !obs.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Observaciones").font(.caption).foregroundStyle(.secondary)
+                        Text(obs)
+                    }
+                    .padding(.vertical, 2)
+                }
+                if factura.pagado == true {
+                    if let mp = factura.montoPagado {
+                        LabeledContent("Monto pagado", value: mp.currencyString)
+                    }
+                    if let fp = factura.fechaPago?.apiDate {
+                        LabeledContent("Fecha de pago", value: fp.displayString)
+                    }
+                }
+            }
+
+            if isLoading {
+                Section("Productos") {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                }
+            } else if let detalles = factura.detalles, !detalles.isEmpty {
+                Section("Productos") {
+                    ForEach(detalles) { d in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(d.productoNombre ?? "Producto")
+                                .font(.subheadline)
+                            HStack {
+                                let cant = d.cantidad ?? 1
+                                let precio = d.precioVenta ?? 0
+                                Text("\(cant == cant.rounded() ? String(Int(cant)) : String(format: "%.2f", cant)) × \(precio.currencyString)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if let tasa = d.tasaItbms, tasa != "00" {
+                                    Text("· ITBMS \(TasaITBMS(rawValue: tasa)?.label ?? tasa)")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(d.total?.currencyString ?? "-")
+                                    .font(.caption.bold())
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
+            Section("Totales") {
+                LabeledContent("Subtotal", value: factura.subtotal?.currencyString ?? "-")
+                if let d = factura.descuento, d > 0 {
+                    LabeledContent("Descuento", value: "−\(d.currencyString)")
+                        .foregroundStyle(.red)
+                }
+                LabeledContent("ITBMS", value: factura.impuestos?.currencyString ?? "-")
+                if let r = factura.retencionItbms, r > 0 {
+                    LabeledContent("Retención ITBMS", value: "−\(r.currencyString)")
+                        .foregroundStyle(.orange)
+                }
+                LabeledContent("Total", value: factura.total?.currencyString ?? "-")
+                    .font(.headline)
+            }
+        }
+        .navigationTitle(factura.serie.flatMap { $0.isEmpty ? nil : $0 } ?? "Factura")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if factura.estadoFe == "EMITIDA" {
+                    Button {
+                        Task { await descargarFePdf() }
+                    } label: {
+                        if descargandoFePdf {
+                            ProgressView()
+                        } else {
+                            Label("PDF FE", systemImage: "checkmark.seal")
+                        }
+                    }
+                }
+                Button {
+                    Task { await descargarPdf() }
+                } label: {
+                    if descargandoPdf {
+                        ProgressView()
+                    } else {
+                        Label("PDF", systemImage: "square.and.arrow.down")
+                    }
+                }
+            }
+        }
+        .sheet(item: $pdfToShare) { item in
+            PDFShareSheet(data: item.data, suggestedName: item.suggestedName ?? "Factura.pdf")
+        }
+        .alert("Error",
+               isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+               )) {
+            Button("OK") { errorMessage = nil }
+        } message: { Text(errorMessage ?? "") }
+        .task {
+            guard factura.detalles == nil || factura.detalles!.isEmpty else { return }
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                factura = try await APIClient.shared.getFactura(id: facturaId)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    @ViewBuilder private var pagoBadge: some View {
+        if factura.anulada == true {
+            badge("ANULADA", color: .red)
+        } else {
+            badge(factura.pagado == true ? "PAGADA" : "PENDIENTE",
+                  color: factura.pagado == true ? .green : .orange)
+        }
+    }
+
+    @ViewBuilder private var feBadge: some View {
+        switch factura.estadoFe {
+        case "EMITIDA": badge("FE EMITIDA", color: .teal)
+        case "ERROR":   badge("FE ERROR",   color: .red)
+        default:        EmptyView()
+        }
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption2.bold())
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .foregroundStyle(color)
+            .clipShape(Capsule())
+    }
+
+    private func descargarPdf() async {
+        descargandoPdf = true
+        defer { descargandoPdf = false }
+        do {
+            let data = try await APIClient.shared.downloadFacturaPdf(id: facturaId)
+            pdfToShare = PDFShareItem(
+                data: data,
+                id: facturaId,
+                suggestedName: "Factura_\(factura.clienteDisplayName.replacingOccurrences(of: " ", with: "_")).pdf"
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func descargarFePdf() async {
+        descargandoFePdf = true
+        defer { descargandoFePdf = false }
+        do {
+            let data = try await APIClient.shared.downloadFacturaFePdf(id: facturaId)
+            pdfToShare = PDFShareItem(
+                data: data,
+                id: facturaId,
+                suggestedName: "FacturaFE_\(factura.serie ?? String(facturaId)).pdf"
+            )
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

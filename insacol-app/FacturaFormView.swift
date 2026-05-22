@@ -7,7 +7,7 @@ private struct FacturaLineaItem: Identifiable {
     var tipoProducto: String?
     var cantidad: Double = 1
     var precioVenta: Double = 0
-    var tasaItbms: String = "00"
+    var tasaItbms: String = "01"
 
     var total: Double { cantidad * precioVenta }
 
@@ -63,7 +63,7 @@ private final class FacturaFormViewModel {
             l.tipoProducto = d.tipoProducto
             l.cantidad = d.cantidad ?? 1
             l.precioVenta = d.precioVenta ?? 0
-            l.tasaItbms = d.tasaItbms ?? "00"
+            l.tasaItbms = d.tasaItbms ?? "01"
             return l
         }
     }
@@ -303,11 +303,14 @@ private struct FacturaLineaFormRow: View {
                     .pickerStyle(.menu)
                     .frame(width: 70)
                 }
-                Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Total").font(.caption).foregroundStyle(.secondary)
-                    Text(linea.total.currencyString).font(.subheadline.bold())
+                    Text(linea.total.currencyString)
+                        .font(.subheadline.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .padding(.vertical, 4)
