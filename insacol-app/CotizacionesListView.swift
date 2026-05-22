@@ -237,22 +237,10 @@ private struct CotizacionRow: View {
     let cotizacion: CotizacionDto
 
     var body: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(cotizacion.clienteDisplayName).font(.headline).lineLimit(1)
-                    Spacer()
-                    if let facturada = cotizacion.facturada {
-                        let color: Color = facturada ? .green : .orange
-                        Text(facturada ? "FACTURADA" : "PENDIENTE")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(color.opacity(0.15))
-                            .foregroundStyle(color)
-                            .clipShape(Capsule())
-                    }
-                }
-                HStack(spacing: 12) {
+                Text(cotizacion.clienteDisplayName).font(.headline).lineLimit(1)
+                HStack(spacing: 8) {
                     if let s = cotizacion.serie, !s.isEmpty {
                         Text(s).font(.caption).foregroundStyle(.secondary)
                     }
@@ -261,9 +249,21 @@ private struct CotizacionRow: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                if let total = cotizacion.total {
-                    Text(total.currencyString).font(.subheadline.bold())
+                if let facturada = cotizacion.facturada {
+                    let color: Color = facturada ? .green : .orange
+                    Text(facturada ? "FACTURADA" : "PENDIENTE")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(color.opacity(0.15))
+                        .foregroundStyle(color)
+                        .clipShape(Capsule())
                 }
+            }
+            Spacer()
+            if let total = cotizacion.total {
+                Text(total.currencyString)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
             }
         }
         .padding(.vertical, 4)

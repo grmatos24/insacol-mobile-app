@@ -291,6 +291,12 @@ enum DateFormatters {
         return f
     }()
 
+    static let isoDateTime: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     static let displayDate: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_PA")
@@ -305,7 +311,10 @@ extension Date {
 }
 
 extension String {
-    var apiDate: Date? { DateFormatters.isoDate.date(from: self) }
+    var apiDate: Date? {
+        DateFormatters.isoDate.date(from: self)
+            ?? DateFormatters.isoDateTime.date(from: self)
+    }
 }
 
 // MARK: - Producto

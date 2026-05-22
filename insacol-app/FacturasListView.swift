@@ -287,24 +287,28 @@ private struct FacturaRow: View {
     let factura: FacturaDto
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(factura.clienteDisplayName).font(.headline).lineLimit(1)
-                Spacer()
-                pagoBadge
-            }
-            HStack(spacing: 8) {
-                if let s = factura.serie, !s.isEmpty {
-                    Text(s).font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    if let s = factura.serie, !s.isEmpty {
+                        Text(s).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let f = factura.fecha?.apiDate {
+                        Label(f.displayString, systemImage: "calendar")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                if let f = factura.fecha?.apiDate {
-                    Label(f.displayString, systemImage: "calendar")
-                        .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    pagoBadge
+                    feBadge
                 }
-                feBadge
             }
+            Spacer()
             if let total = factura.total {
-                Text(total.currencyString).font(.subheadline.bold())
+                Text(total.currencyString)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
             }
         }
         .padding(.vertical, 4)
