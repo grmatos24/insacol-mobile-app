@@ -323,20 +323,26 @@ private struct FacturaRow: View {
     }
 
     @ViewBuilder
+    @ViewBuilder
     private var feBadge: some View {
-        let estado = factura.estadoFe ?? "BORRADOR"
-        let (label, color): (String, Color) = switch estado {
-        case "EMITIDA": ("FE EMITIDA", .teal)
-        case "ERROR": ("FE ERROR", .red)
-        case "ANULADA": ("FE ANULADA", .gray)
-        default: ("BORRADOR", .secondary)
+        switch factura.estadoFe {
+        case "EMITIDA":
+            Text("FE EMITIDA")
+                .font(.caption2.bold())
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.teal.opacity(0.15))
+                .foregroundStyle(Color.teal)
+                .clipShape(Capsule())
+        case "ERROR":
+            Text("FE ERROR")
+                .font(.caption2.bold())
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.red.opacity(0.15))
+                .foregroundStyle(Color.red)
+                .clipShape(Capsule())
+        default:
+            EmptyView()
         }
-        Text(label)
-            .font(.caption2.bold())
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
     }
 }
 
