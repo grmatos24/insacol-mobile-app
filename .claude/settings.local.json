@@ -48,7 +48,11 @@
       "Bash(defaults read *)",
       "Bash(curl -s \"http://192.168.1.21:8080/clientes/1\" -H \"Authorization: Bearer $\\(defaults read com.insacol.app authToken || echo ''\\)\")",
       "Bash(python3 -m json.tool)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(rm -rf /tmp/Payload /tmp/insacol-app.ipa)",
+      "Bash(mkdir -p /tmp/Payload)",
+      "Bash(cp -r \"/Users/guillermomatos/Library/Developer/Xcode/DerivedData/insacol-app-eqctgxmabjwnbhhijankyxpwyrzd/Build/Products/Release-iphoneos/insacol-app.app\" /tmp/Payload/)",
+      "Bash(zip -r insacol-app.ipa Payload)"
     ]
   }
 }
