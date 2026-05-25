@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 // MARK: - Hex color init
 
@@ -23,64 +25,24 @@ extension Color {
     }
 }
 
-// MARK: - UIColor adaptive helper
-
-private extension UIColor {
-    static func adaptive(light: UIColor, dark: UIColor) -> UIColor {
-        UIColor { $0.userInterfaceStyle == .dark ? dark : light }
-    }
-
-    convenience init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let r = CGFloat((int >> 16) & 0xFF) / 255
-        let g = CGFloat((int >> 8)  & 0xFF) / 255
-        let b = CGFloat( int        & 0xFF) / 255
-        self.init(red: r, green: g, blue: b, alpha: 1)
-    }
-}
-
 // MARK: - Theme
 
 enum Theme {
-    // Brand — fixed in both modes
+    // Brand — fijos en ambos modos
     static let amber     = Color(hex: "#FFC107")
     static let amberDark = Color(hex: "#F59E0B")
     static let navy      = Color(hex: "#0F172A")
     static let navyLight = Color(hex: "#1E293B")
 
-    // Surfaces — adaptive
-    static let surface = Color(UIColor.adaptive(
-        light: UIColor(hex: "#FAFAF7"),
-        dark:  UIColor(hex: "#0A0F1C")          // más oscuro que navy para que las cards resalten
-    ))
+    // Surfaces — adaptativos
+    static let surface     = adaptiveColor(light: Color(hex: "#FAFAF7"), dark: Color(hex: "#0A0F1C"))
+    static let cardSurface = adaptiveColor(light: .white,                dark: Color(hex: "#1E293B"))
+    static let cardBorder  = adaptiveColor(light: Color.black.opacity(0.10), dark: Color.white.opacity(0.12))
+    static let divider     = adaptiveColor(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.10))
 
-    static let cardSurface = Color(UIColor.adaptive(
-        light: .white,
-        dark:  UIColor(hex: "#1E293B")           // navyLight
-    ))
-
-    static let cardBorder = Color(UIColor.adaptive(
-        light: .black.withAlphaComponent(0.10),
-        dark:  .white.withAlphaComponent(0.12)
-    ))
-
-    static let divider = Color(UIColor.adaptive(
-        light: .black.withAlphaComponent(0.08),
-        dark:  .white.withAlphaComponent(0.10)
-    ))
-
-    // Text — adaptive
-    static let navyText = Color(UIColor.adaptive(
-        light: UIColor(hex: "#0F172A"),
-        dark:  UIColor(hex: "#F1F5F9")
-    ))
-
-    static let textMuted = Color(UIColor.adaptive(
-        light: UIColor(hex: "#3C3C43").withAlphaComponent(0.60),
-        dark:  .white.withAlphaComponent(0.50)
-    ))
+    // Text — adaptativos
+    static let navyText  = adaptiveColor(light: Color(hex: "#0F172A"), dark: Color(hex: "#F1F5F9"))
+    static let textMuted = adaptiveColor(light: Color(hex: "#3C3C43").opacity(0.60), dark: Color.white.opacity(0.50))
 
     // Status — mismos en ambos modos
     static let success = Color(hex: "#34C759")
@@ -94,9 +56,19 @@ enum Theme {
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
+
+    // MARK: - Helper
+
+    private static func adaptiveColor(light: Color, dark: Color) -> Color {
+#if canImport(UIKit)
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light) })
+#else
+        light
+#endif
+    }
 }
 
-// MARK: - Glass card modifier (LoginView)
+// MARK: - Glass card modifier
 
 extension View {
     func glassCard() -> some View {
